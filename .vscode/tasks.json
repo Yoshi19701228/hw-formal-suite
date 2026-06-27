@@ -78,6 +78,51 @@
     },
 
     // -------------------------------------------------------
+    // 仕様書 (PDF/DOCX) から要件を抽出して YAML を生成
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Extract from spec (active file)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/extract.py",
+        "${file}",
+        "--output", "${workspaceFolder}/requirements",
+        "--verbose"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+
+    // -------------------------------------------------------
+    // 仕様書 → YAML 抽出 → SVA 生成 をワンショットで実行
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Extract + Generate (active file)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/extract.py",
+        "${file}",
+        "--output", "${workspaceFolder}/requirements",
+        "--generate",
+        "--verbose"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+
+    // -------------------------------------------------------
     // Python 依存パッケージのインストール
     // 初回セットアップ用
     // -------------------------------------------------------
