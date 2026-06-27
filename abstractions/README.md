@@ -53,7 +53,7 @@ concrete model).
   step.  Think of it as existential quantification at each cycle.  Useful for:
   abstract data payloads that are irrelevant to the property under test.
 
-Both are JasperGold / Questa Formal extensions.  Some tools (SymbiYosys) use
+Both are Jasper / Questa Formal extensions.  Some tools (SymbiYosys) use
 the `assume` keyword or `$any` instead; consult your tool's reference manual.
 
 ---
@@ -250,11 +250,11 @@ production flows where the RTL is locked.
 
 ### Option C: Blackbox + abstract model
 
-Some tools (JasperGold) support blackboxing a module and replacing it with a
+Some tools (Jasper) support blackboxing a module and replacing it with a
 model automatically:
 
 ```tcl
-# In the JasperGold script:
+# In the Jasper script:
 formal compile -d top -f filelist.f \
   -blackbox sram_1r1w
 formal compile -d top -f filelist.f \
@@ -298,7 +298,7 @@ bind fifo_abstract fv_fifo_check fv_check_inst ();
 
 ## Tool Compatibility Notes
 
-| Feature        | JasperGold | Questa Formal | SymbiYosys |
+| Feature        | Jasper | Questa Formal | SymbiYosys |
 |----------------|-----------|---------------|------------|
 | `$anyconst`    | Yes        | Yes           | `$anyconst` (Yosys extension) |
 | `$anyseq`      | Yes        | Yes           | `$anyseq`  |

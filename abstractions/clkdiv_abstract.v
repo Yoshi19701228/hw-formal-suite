@@ -1,7 +1,7 @@
 // clkdiv_abstract.v
 // Abstract clock divider for formal verification.
 //
-// Most formal tools (JasperGold, Questa Formal, SymbiYosys) do not support
+// Most formal tools (Jasper, Questa Formal, SymbiYosys) do not support
 // truly multi-clock designs: a second clock derived inside the DUT cannot be
 // used as a formal clock edge.  This abstraction avoids the problem by
 // replacing the divided clock with a clock-enable (clk_en) pulse in the

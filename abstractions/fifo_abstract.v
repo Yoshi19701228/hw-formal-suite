@@ -18,7 +18,7 @@
 //   full FIFO or pops from an empty one.  Wire these as assumptions in
 //   the assertion wrapper if the DUT has its own back-pressure logic.
 //
-// Verilog-2001 compatible.  $anyseq is a JasperGold/Questa Formal
+// Verilog-2001 compatible.  $anyseq is a Jasper/Questa Formal
 // extension.
 
 `default_nettype none

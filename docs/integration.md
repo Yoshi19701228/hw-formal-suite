@@ -150,7 +150,7 @@ vlog formal_top/apb3_formal_top.sv
 
 ### Step 3 — Tool invocation
 
-**JasperGold:**
+**Jasper:**
 ```tcl
 analyze -sv09 packages/apb3/apb3_pkg.sv
 analyze -v    packages/apb3/apb3_helper.v

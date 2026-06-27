@@ -1,7 +1,7 @@
 // watchdog_assert_fml.sv
 // Formal verification assertion module for watchdog timer.
 // Order: assert (safety) -> cover (reachability) -> assume (environment).
-// No $error; intended for formal property checking tools (JasperGold, SymbiYosys, etc.).
+// No $error; intended for formal property checking tools (Jasper, SymbiYosys, etc.).
 
 module watchdog_assert_fml
   import watchdog_pkg::*;

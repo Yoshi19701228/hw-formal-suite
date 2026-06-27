@@ -15,7 +15,7 @@
 //   - Default LATENCY=1: ack fires the cycle after req.
 //   - For LATENCY>1, extend the shift register below (currently a stub).
 //
-// Tool compatibility: Verilog-2001. $anyconst/$anyseq are JasperGold/Questa
+// Tool compatibility: Verilog-2001. $anyconst/$anyseq are Jasper/Questa
 // Formal extensions; annotate with (* anyconst *) where tools prefer attributes.
 
 `default_nettype none

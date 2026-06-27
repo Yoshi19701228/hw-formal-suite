@@ -1023,7 +1023,7 @@ When a sub-component causes state-space explosion, replace it with an abstract m
 bind sram_1024x32 mem_abstract #(.ADDR_W(20), .DATA_W(32)) u_abs (.clk(CLK), ...);
 
 // Pattern 3: blackbox + rename (tool-specific)
-// In JasperGold: <blackbox name="sram_1024x32"/> in tcl, then add abstract as top-level
+// In Jasper: <blackbox name="sram_1024x32"/> in tcl, then add abstract as top-level
 ```
 
 ---

@@ -22,7 +22,7 @@
 // Latency is abstracted to 1 cycle regardless of the real pipeline depth.
 // If latency must be preserved, compose with pipeline_abstract.v.
 //
-// Verilog-2001 compatible.  $anyseq is a JasperGold/Questa Formal extension.
+// Verilog-2001 compatible.  $anyseq is a Jasper/Questa Formal extension.
 
 `default_nettype none
 

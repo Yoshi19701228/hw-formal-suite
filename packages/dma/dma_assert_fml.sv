@@ -1,7 +1,7 @@
 // dma_assert_fml.sv
 // Formal verification assertion module for DMA controller.
 // Order: assert (safety) -> cover (reachability) -> assume (environment).
-// No $error; intended for formal property checking tools (JasperGold, SymbiYosys, etc.).
+// No $error; intended for formal property checking tools (Jasper, SymbiYosys, etc.).
 
 module dma_assert_fml
   import dma_pkg::*;
