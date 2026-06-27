@@ -1,0 +1,46 @@
+{
+  // -------------------------------------------------------
+  // ファイル拡張子 → 言語 ID のマッピング
+  // スニペットの scope "systemverilog,verilog" と一致させる
+  // -------------------------------------------------------
+  "files.associations": {
+    "*.sv":  "systemverilog",
+    "*.svh": "systemverilog",
+    "*.v":   "verilog",
+    "*.vh":  "verilog"
+  },
+
+  // -------------------------------------------------------
+  // スニペット補完を有効にする
+  // -------------------------------------------------------
+  "[systemverilog]": {
+    "editor.snippetSuggestions": "top",
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.quickSuggestions": {
+      "other": true,
+      "comments": false,
+      "strings": false
+    }
+  },
+  "[verilog]": {
+    "editor.snippetSuggestions": "top",
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.quickSuggestions": {
+      "other": true,
+      "comments": false,
+      "strings": false
+    }
+  },
+
+  // -------------------------------------------------------
+  // Copilot Instructions を有効にする（VS Code 1.90+ で自動読み込み）
+  // -------------------------------------------------------
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+
+  // -------------------------------------------------------
+  // エディタ設定
+  // -------------------------------------------------------
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "files.trimTrailingWhitespace": true
+}
