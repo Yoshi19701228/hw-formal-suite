@@ -1,0 +1,101 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+
+    // -------------------------------------------------------
+    // 現在開いている .yaml ファイルから SVA を生成
+    // Ctrl+Shift+B のデフォルトタスク
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Generate SVA (active file)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/generate.py",
+        "${file}",
+        "--output", "${workspaceFolder}/generated",
+        "--verbose"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "default"
+      }
+    },
+
+    // -------------------------------------------------------
+    // requirements/ フォルダ内の全 .yaml を一括処理
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Generate SVA (all requirements)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/generate.py",
+        "${workspaceFolder}/requirements/*.yaml",
+        "--output", "${workspaceFolder}/generated",
+        "--parallel", "4",
+        "--verbose"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+
+    // -------------------------------------------------------
+    // requirements/ フォルダ内の全 .yaml を一括処理（並列なし）
+    // API レート制限が気になるとき用
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Generate SVA (all, sequential)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/generate.py",
+        "${workspaceFolder}/requirements/*.yaml",
+        "--output", "${workspaceFolder}/generated",
+        "--verbose"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+
+    // -------------------------------------------------------
+    // Python 依存パッケージのインストール
+    // 初回セットアップ用
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Install dependencies",
+      "type": "shell",
+      "command": "pip",
+      "args": [
+        "install",
+        "-r", "${workspaceFolder}/scripts/requirements.txt"
+      ],
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+
+  ]
+}

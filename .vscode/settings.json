@@ -42,5 +42,19 @@
   // -------------------------------------------------------
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
-  "files.trimTrailingWhitespace": true
+  "files.trimTrailingWhitespace": true,
+
+  // -------------------------------------------------------
+  // generate.py 用: ANTHROPIC_API_KEY を VS Code タスクに渡す
+  // ここに直接書かず、OS の環境変数か .env で管理することを推奨
+  // -------------------------------------------------------
+  "terminal.integrated.env.osx": {
+    // "ANTHROPIC_API_KEY": "sk-ant-..."   ← コメントを外してキーを設定
+  },
+  "terminal.integrated.env.linux": {
+    // "ANTHROPIC_API_KEY": "sk-ant-..."
+  },
+  "terminal.integrated.env.windows": {
+    // "ANTHROPIC_API_KEY": "sk-ant-..."
+  }
 }
