@@ -12,6 +12,49 @@ If the user specifies an environment upfront, skip the question.
 
 ---
 
+## Integration Pattern (always follow this when generating formal packages)
+
+When generating or explaining how to use a formal package, always apply the **Wrapper Pattern**:
+
+```
+formal_top.sv
+  ├── DUT u_dut (...)                    ← unchanged RTL
+  ├── *_helper u_hlp (DUT signals → helper outputs)
+  └── *_assert_fml u_fml (DUT signals + helper outputs)
+```
+
+### Why the wrapper pattern
+
+- `bind` alone cannot share helper output wires with the assertion module — they live in different scopes.
+- Instantiating both in the same `formal_top` module makes wires visible to both.
+
+### Rules for generating a formal wrapper
+
+1. Declare `logic clk, rst_n` and all DUT interface signals.
+2. Instantiate DUT with renamed ports (DUT port name → local signal name).
+3. Declare wires for **all helper outputs** (copy from `*_helper.v` port list).
+4. Instantiate `*_helper` — connect DUT signals + helper output wires.
+5. Instantiate `*_assert_fml` — connect same DUT signals + same helper output wires.
+
+### Simulator pattern (simpler)
+
+```systemverilog
+// Single file: bind inside testbench
+bind <dut_module> <pkg>_assert_sim #(.PARAM(VAL)) u_chk (.*);
+// Use .* only when DUT internal signal names match assertion port names exactly.
+// Otherwise list connections explicitly.
+```
+
+### Trigger: when to generate a wrapper
+
+Generate the formal wrapper automatically when the user says any of:
+- "フォーマル用のラッパーを作って" / "generate formal wrapper"
+- "組み込み方を教えて" / "how to integrate"
+- "formal_top を作って" / "create formal top"
+- After generating a formal package, proactively offer: "Would you like me to generate the formal_top wrapper for your DUT?"
+
+---
+
 ## Environment Modes
 
 ### Mode A — Simulator

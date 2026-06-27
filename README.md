@@ -61,6 +61,78 @@ If you do not specify an environment, Copilot will ask before generating.
 
 ---
 
+## Integration: helper + assertion の使い方
+
+> 詳細は **[docs/integration.md](docs/integration.md)** を参照。
+
+### helper と assertion の役割
+
+```
+*_helper.v           DUT の外に置く Verilog モジュール
+  ├── timeout counter    → ##[1:N] の代替フラグを出力
+  ├── ghost state        → golden_data / shadow_count などを出力
+  └── $anyconst 値       → chosen_addr など
+
+      ↓ output wires をそのまま接続
+
+*_assert_fml.sv      SVA アサーションモジュール (bind またはインスタンス化)
+  ├── DUT の信号を入力として受け取る
+  └── helper の出力も入力として受け取る
+```
+
+### シミュレータ: 2 ステップ
+
+```systemverilog
+// ① ファイルをコンパイルリストに追加
+// vlog packages/apb3/apb3_assert_sim.sv
+
+// ② testbench で bind
+bind apb3_slave apb3_assert_sim #(.ADDR_W(32), .DATA_W(32)) u_chk (.*);
+//                                                                   ^^
+//                           DUT 内の信号名とポート名が一致していれば .* でOK
+```
+
+### フォーマル: ラッパーパターン (推奨)
+
+helper の出力を assertion に渡すため、**同じスコープ**に両方をインスタンス化します。
+
+```systemverilog
+// formal_top/apb3_formal_top.sv
+module apb3_formal_top;
+  logic clk, rst_n, psel, penable, pwrite, pready, pslverr;
+  logic [31:0] paddr, pwdata, prdata;
+
+  apb3_slave u_dut (.PCLK(clk), .PRESETn(rst_n), .PSEL(psel), /* ... */);
+
+  // ① helper を DUT の隣にインスタンス化
+  logic [4:0] cnt_pready_wait;
+  logic       pready_timeout;
+
+  apb3_helper #(.DATA_W(32)) u_hlp (
+    .clk(clk), .rst_n(rst_n),
+    .psel(psel), .penable(penable), .pready(pready),
+    .cnt_pready_wait(cnt_pready_wait),   // ← 出力
+    .pready_timeout(pready_timeout)      // ← 出力
+  );
+
+  // ② assertion モジュールに DUT 信号 + helper 出力を渡す
+  apb3_assert_fml #(.ADDR_W(32), .DATA_W(32)) u_fml (
+    .clk(clk), .rst_n(rst_n),
+    .psel(psel), .penable(penable), .pwrite(pwrite),
+    .paddr(paddr), .pwdata(pwdata), .pready(pready),
+    .prdata(prdata), .pslverr(pslverr),
+    .cnt_pready_wait(cnt_pready_wait),   // ← helper から
+    .pready_timeout(pready_timeout)      // ← helper から
+  );
+endmodule
+```
+
+> `bind` に helper と assertion を両方 bind すると helper の出力ワイヤが assertion から見えなくなります。**フォーマルはラッパーパターンを使ってください。**
+
+Copilot Chat で `「[DUT名] のフォーマル用ラッパーを生成して」` と入力すると、使用パッケージのポートリストに基づいてラッパーを自動生成します。
+
+---
+
 ## Two Modes
 
 ### Simulator
