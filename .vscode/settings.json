@@ -1,7 +1,7 @@
 {
   // -------------------------------------------------------
-  // ファイル拡張子 → 言語 ID のマッピング
-  // スニペットの scope "systemverilog,verilog" と一致させる
+  // File extension to language ID mapping
+  // Must match snippet scope "systemverilog,verilog"
   // -------------------------------------------------------
   "files.associations": {
     "*.sv":  "systemverilog",
@@ -11,7 +11,7 @@
   },
 
   // -------------------------------------------------------
-  // スニペット補完を有効にする
+  // Enable snippet completion
   // -------------------------------------------------------
   "[systemverilog]": {
     "editor.snippetSuggestions": "top",
@@ -33,20 +33,20 @@
   },
 
   // -------------------------------------------------------
-  // Copilot Instructions を有効にする（VS Code 1.90+ で自動読み込み）
+  // Enable Copilot Instructions (auto-loaded in VS Code 1.90+)
   // -------------------------------------------------------
   "github.copilot.chat.codeGeneration.useInstructionFiles": true,
 
   // -------------------------------------------------------
-  // エディタ設定
+  // Editor settings
   // -------------------------------------------------------
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
   "files.trimTrailingWhitespace": true,
 
   // -------------------------------------------------------
-  // generate.py 用: ANTHROPIC_API_KEY を VS Code タスクに渡す
-  // ここに直接書かず、OS の環境変数か .env で管理することを推奨
+  // For generate.py: pass ANTHROPIC_API_KEY to VS Code tasks
+  // Recommended to manage via OS environment variable or .env rather than writing it here directly
   // -------------------------------------------------------
   "terminal.integrated.env.osx": {
     "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"

@@ -1,11 +1,11 @@
 {
   "recommendations": [
-    // GitHub Copilot（必須）
+    // GitHub Copilot (required)
     "GitHub.copilot",
     "GitHub.copilot-chat",
 
-    // SystemVerilog / Verilog 言語サポート（スニペットのシンタックスハイライト・補完に必要）
-    // どちらか 1 つをインストールすればOK
+    // SystemVerilog / Verilog language support (required for snippet syntax highlighting and completion)
+    // Install either one
     "mshr-k.veriloghdl",         // Verilog-HDL/SystemVerilog/Bluespec — language ID: systemverilog, verilog
     "eirikpre.systemverilog"     // SystemVerilog Language Support — language ID: systemverilog
   ]

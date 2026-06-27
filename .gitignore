@@ -9,5 +9,5 @@ __pycache__/
 *.pyc
 .venv/
 
-# API key — settings.json を直接書き換えた場合は必ずここに追加
+# API key — uncomment if you write the key directly into settings.json
 # .vscode/settings.json

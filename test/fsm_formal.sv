@@ -1,20 +1,20 @@
 // ============================================================
-// [テスト] FSM SVA — Formal (non-determinism)
-// スニペット: sva-fml-fsm-helper + sva-fml-fsm を展開したサンプル
+// [Test] FSM SVA — Formal (non-determinism)
+// Sample showing expansion of snippets: sva-fml-fsm-helper + sva-fml-fsm
 // ============================================================
 
 // --- Copilot Chat Test ---
-// Copilot Chat (Cmd+Shift+I) に以下をコピペして試す:
+// Copy and paste the following into Copilot Chat (Cmd+Shift+I) to try:
 //
-//   【フォーマル検証用】
-//   4 状態 one-hot FSM (IDLE=4'b0001, REQ=4'b0010, PROC=4'b0100, DONE=4'b1000) の
-//   デッドロック・ライブロック・初期状態を検証する SVA と
-//   Verilog helper を生成して。
-//   progress state は DONE, 最大待機サイクルは 32。
-//   クロック: clk, リセット: rst_n (active-low)
+//   [Formal Verification]
+//   Generate SVA and a Verilog helper to verify deadlock, livelock,
+//   and initial state for a 4-state one-hot FSM
+//   (IDLE=4'b0001, REQ=4'b0010, PROC=4'b0100, DONE=4'b1000).
+//   Progress state: DONE, maximum wait cycles: 32.
+//   Clock: clk, reset: rst_n (active-low)
 
 // ============================================================
-// 期待される生成結果 — helper (.v)
+// Expected generated output — helper (.v)
 // ============================================================
 
 // --- fsm_formal_helper.v ---
@@ -54,7 +54,7 @@ endmodule
 */
 
 // ============================================================
-// 期待される生成結果 — SVA (.sv)
+// Expected generated output — SVA (.sv)
 // ============================================================
 
 localparam IDLE = 4'b0001;

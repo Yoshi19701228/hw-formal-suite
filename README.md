@@ -7,37 +7,37 @@ Supports both **Simulator** and **Formal Verification** modes.
 
 ## Auto-generate from Requirements (CLI)
 
-YAML ファイルに要件を記述するだけで、Claude API が SVA ファイルを自動生成・保存します。
+Simply describe your requirements in a YAML file and the Claude API will automatically generate and save SVA files.
 
-### セットアップ
+### Setup
 
 ```bash
 pip install -r scripts/requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### 使い方
+### Usage
 
 ```bash
-# 単一 DUT
+# Single DUT
 python scripts/generate.py requirements/apb3_slave.yaml
 
-# 複数 DUT を並列処理
+# Multiple DUTs in parallel
 python scripts/generate.py requirements/*.yaml --parallel 4
 
-# 出力先を指定
+# Specify output directory
 python scripts/generate.py requirements/axi4_master.yaml --output generated/ --verbose
 ```
 
-### 要件ファイルの書き方 (`requirements/*.yaml`)
+### Requirements File Format (`requirements/*.yaml`)
 
 ```yaml
 name: apb3_slave_check
-dut_module: apb3_slave       # DUT のモジュール名
+dut_module: apb3_slave       # DUT module name
 mode: formal                 # formal | simulator
-package: apb3                # 参照パッケージ (省略可)
+package: apb3                # reference package (optional)
 
-signals:                     # assertion port名: DUT内の信号名
+signals:                     # assertion port name: DUT internal signal name
   clk:     PCLK
   rst_n:   PRESETn
   psel:    PSEL
@@ -48,27 +48,27 @@ parameters:
   ADDR_W: 32
   DATA_W: 32
 
-requirements:                # 自然言語で検証したい条件を列挙
+requirements:                # list conditions to verify in natural language
   - PENABLE must assert exactly one cycle after PSEL
   - PREADY must assert within 16 cycles of PENABLE
   - PSLVERR is only valid when PSEL, PENABLE, PREADY are all asserted
 
 output:
-  dir: generated/apb3_slave/ # 出力先
-  wrapper: true              # formal_top.sv も生成する
+  dir: generated/apb3_slave/ # output directory
+  wrapper: true              # also generate formal_top.sv
 ```
 
-### 出力ファイル
+### Output Files
 
 ```
 generated/
   apb3_slave/
-    apb3_helper.v          ← Verilog ヘルパー (タイムアウトカウンタ等)
-    apb3_assert_fml.sv     ← SVA アサーション
-    formal_top.sv          ← Jasper / SymbiYosys 用ラッパー
+    apb3_helper.v          <- Verilog helper (timeout counter, etc.)
+    apb3_assert_fml.sv     <- SVA assertions
+    formal_top.sv          <- Wrapper for Jasper / SymbiYosys
 ```
 
-サンプル要件ファイルは `requirements/` を参照してください。
+See `requirements/` for sample requirements files.
 
 ---
 
@@ -116,53 +116,53 @@ Progress state: DONE. Max wait: 32 cycles.
 
 **Japanese examples:**
 ```
-【シミュレータ用】AXI4 の Write handshake を検証する SVA を作って。
-信号名: awvalid, awready, wvalid, wready。クロック: clk、リセット: rst_n。
+[Simulator] Generate SVA to verify AXI4 Write handshake.
+Signal names: awvalid, awready, wvalid, wready. Clock: clk, reset: rst_n.
 ```
 
 ```
-【フォーマル検証用】req から 16 サイクル以内に ack が返ることを確認したい。
-信号名: req_valid, ack_valid。non-determinism を活用して。
+[Formal] Verify that req receives an ack within 16 cycles.
+Signal names: req_valid, ack_valid. Use non-determinism.
 ```
 
 If you do not specify an environment, Copilot will ask before generating.
 
 ---
 
-## Integration: helper + assertion の使い方
+## Integration: How to Use Helper + Assertion
 
-> 詳細は **[docs/integration.md](docs/integration.md)** を参照。
+> For details, see **[docs/integration.md](docs/integration.md)**.
 
-### helper と assertion の役割
+### Roles of Helper and Assertion
 
 ```
-*_helper.v           DUT の外に置く Verilog モジュール
-  ├── timeout counter    → ##[1:N] の代替フラグを出力
-  ├── ghost state        → golden_data / shadow_count などを出力
-  └── $anyconst 値       → chosen_addr など
+*_helper.v           Verilog module placed outside the DUT
+  ├── timeout counter    → outputs a flag as alternative to ##[1:N]
+  ├── ghost state        → outputs golden_data / shadow_count, etc.
+  └── $anyconst value    → outputs chosen_addr, etc.
 
-      ↓ output wires をそのまま接続
+      ↓ connect output wires directly
 
-*_assert_fml.sv      SVA アサーションモジュール (bind またはインスタンス化)
-  ├── DUT の信号を入力として受け取る
-  └── helper の出力も入力として受け取る
+*_assert_fml.sv      SVA assertion module (bind or instantiate)
+  ├── receives DUT signals as inputs
+  └── also receives helper outputs as inputs
 ```
 
-### シミュレータ: 2 ステップ
+### Simulator: 2 Steps
 
 ```systemverilog
-// ① ファイルをコンパイルリストに追加
+// Step 1: add file to compile list
 // vlog packages/apb3/apb3_assert_sim.sv
 
-// ② testbench で bind
+// Step 2: bind in testbench
 bind apb3_slave apb3_assert_sim #(.ADDR_W(32), .DATA_W(32)) u_chk (.*);
 //                                                                   ^^
-//                           DUT 内の信号名とポート名が一致していれば .* でOK
+//                           Use .* if DUT internal signal names match port names exactly
 ```
 
-### フォーマル: ラッパーパターン (推奨)
+### Formal: Wrapper Pattern (recommended)
 
-helper の出力を assertion に渡すため、**同じスコープ**に両方をインスタンス化します。
+To pass helper outputs to assertions, instantiate both in the **same scope**.
 
 ```systemverilog
 // formal_top/apb3_formal_top.sv
@@ -172,32 +172,32 @@ module apb3_formal_top;
 
   apb3_slave u_dut (.PCLK(clk), .PRESETn(rst_n), .PSEL(psel), /* ... */);
 
-  // ① helper を DUT の隣にインスタンス化
+  // Step 1: instantiate helper next to the DUT
   logic [4:0] cnt_pready_wait;
   logic       pready_timeout;
 
   apb3_helper #(.DATA_W(32)) u_hlp (
     .clk(clk), .rst_n(rst_n),
     .psel(psel), .penable(penable), .pready(pready),
-    .cnt_pready_wait(cnt_pready_wait),   // ← 出力
-    .pready_timeout(pready_timeout)      // ← 出力
+    .cnt_pready_wait(cnt_pready_wait),   // <- output
+    .pready_timeout(pready_timeout)      // <- output
   );
 
-  // ② assertion モジュールに DUT 信号 + helper 出力を渡す
+  // Step 2: pass DUT signals + helper outputs to assertion module
   apb3_assert_fml #(.ADDR_W(32), .DATA_W(32)) u_fml (
     .clk(clk), .rst_n(rst_n),
     .psel(psel), .penable(penable), .pwrite(pwrite),
     .paddr(paddr), .pwdata(pwdata), .pready(pready),
     .prdata(prdata), .pslverr(pslverr),
-    .cnt_pready_wait(cnt_pready_wait),   // ← helper から
-    .pready_timeout(pready_timeout)      // ← helper から
+    .cnt_pready_wait(cnt_pready_wait),   // <- from helper
+    .pready_timeout(pready_timeout)      // <- from helper
   );
 endmodule
 ```
 
-> `bind` に helper と assertion を両方 bind すると helper の出力ワイヤが assertion から見えなくなります。**フォーマルはラッパーパターンを使ってください。**
+> If you `bind` both helper and assertion, helper output wires will not be visible to the assertion. **Use the wrapper pattern for formal verification.**
 
-Copilot Chat で `「[DUT名] のフォーマル用ラッパーを生成して」` と入力すると、使用パッケージのポートリストに基づいてラッパーを自動生成します。
+In Copilot Chat, type `"Generate a formal wrapper for [DUT name]"` and it will auto-generate a wrapper based on the port list of the package in use.
 
 ---
 
@@ -385,7 +385,7 @@ bind cache_top   cache_assert_fml #(.ADDR_W(32), .DATA_W(32), .WRITE_POLICY(WRIT
 
 ### Cache Verification — Trigger Phrase
 
-Say **"フォーマル検証でキャッシュ検証をしたいの"** (or "cache verification with formal") in Copilot Chat and it will:
+Say **"I want to do cache verification with formal"** (or "cache verification with formal") in Copilot Chat and it will:
 1. Ask write policy (write-back / write-through), structure, and interface signals
 2. Generate `cache_helper.v` (ghost state + $anyconst) and `cache_assert_fml.sv`
 3. Explain each property (DVI, writeback completeness, refill correctness, etc.)

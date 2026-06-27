@@ -6,7 +6,6 @@ Respond in the same language the user writes in (English or Japanese).
 When the user asks you to generate assertions, **first confirm the target environment**:
 
 > "Which environment? Simulator or Formal Verification?"
-> (Japanese: 「シミュレータ用とフォーマル検証用、どちらで生成しますか？」)
 
 If the user specifies an environment upfront, skip the question.
 
@@ -48,9 +47,9 @@ bind <dut_module> <pkg>_assert_sim #(.PARAM(VAL)) u_chk (.*);
 ### Trigger: when to generate a wrapper
 
 Generate the formal wrapper automatically when the user says any of:
-- "フォーマル用のラッパーを作って" / "generate formal wrapper"
-- "組み込み方を教えて" / "how to integrate"
-- "formal_top を作って" / "create formal top"
+- "Generate a formal wrapper" / "generate formal wrapper"
+- "How do I integrate this" / "how to integrate"
+- "Create a formal_top" / "create formal top"
 - After generating a formal package, proactively offer: "Would you like me to generate the formal_top wrapper for your DUT?"
 
 ---
@@ -965,17 +964,17 @@ When the user asks to verify a specific component or protocol, reference the rel
 | "APB5", "PWAKEUP", "wakeup", "PAUSER", "PNSE" | APB5 package |
 | "AXI3", "WID", "write ID", "locked transaction" | AXI3 package |
 | "AXI4" | AXI4 package |
-| "FIFO", "キュー", "overflow", "underflow" | FIFO package |
-| "CDC", "クロックドメイン", "メタスタビリティ", "synchronizer" | CDC package |
-| "割り込み", "interrupt", "IRQ", "INTC" | Interrupt Controller package |
-| "リセット順序", "reset sequence", "reset domain" | Reset Sequencer package |
-| "カウンタ", "counter" | Counter package |
-| "DMA", "バースト転送", "descriptor" | DMA Controller package |
-| "ウォッチドッグ", "watchdog", "WDT", "kick" | Watchdog Timer package |
-| "クロスバー", "crossbar", "NoC", "routing" | Crossbar/NoC package |
-| "ECC", "SECDED", "error correction", "誤り訂正" | ECC package |
-| "SRAM", "メモリコントローラ", "memory controller" | Memory Controller package |
-| "キャッシュ", "cache", "DVI", "ghost state" | Cache package |
+| "FIFO", "queue", "overflow", "underflow" | FIFO package |
+| "CDC", "clock domain", "metastability", "synchronizer" | CDC package |
+| "interrupt", "IRQ", "INTC" | Interrupt Controller package |
+| "reset sequence", "reset domain" | Reset Sequencer package |
+| "counter" | Counter package |
+| "DMA", "burst transfer", "descriptor" | DMA Controller package |
+| "watchdog", "WDT", "kick" | Watchdog Timer package |
+| "crossbar", "NoC", "routing" | Crossbar/NoC package |
+| "ECC", "SECDED", "error correction" | ECC package |
+| "SRAM", "memory controller" | Memory Controller package |
+| "cache", "DVI", "ghost state" | Cache package |
 
 ---
 
@@ -1033,10 +1032,10 @@ bind sram_1024x32 mem_abstract #(.ADDR_W(20), .DATA_W(32)) u_abs (.clk(CLK), ...
 ### Trigger
 
 Activate this section when the user says any of:
-- "cache verification", "キャッシュ検証"
-- "フォーマル検証でキャッシュ検証をしたいの" (or similar)
+- "cache verification"
+- "I want to do cache verification with formal" (or similar)
 - "DVI", "data value invariant", "ghost state", "write-back verification"
-- "cache coherence", "キャッシュコヒーレンス"
+- "cache coherence"
 
 ### What to Ask First
 

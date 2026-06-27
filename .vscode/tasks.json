@@ -3,8 +3,8 @@
   "tasks": [
 
     // -------------------------------------------------------
-    // 現在開いている .yaml ファイルから SVA を生成
-    // Ctrl+Shift+B のデフォルトタスク
+    // Generate SVA from the currently open .yaml file
+    // Default task for Ctrl+Shift+B
     // -------------------------------------------------------
     {
       "label": "HW Formal: Generate SVA (active file)",
@@ -32,7 +32,7 @@
     },
 
     // -------------------------------------------------------
-    // requirements/ フォルダ内の全 .yaml を一括処理
+    // Process all .yaml files in the requirements/ folder at once
     // -------------------------------------------------------
     {
       "label": "HW Formal: Generate SVA (all requirements)",
@@ -55,8 +55,8 @@
     },
 
     // -------------------------------------------------------
-    // requirements/ フォルダ内の全 .yaml を一括処理（並列なし）
-    // API レート制限が気になるとき用
+    // Process all .yaml files in the requirements/ folder sequentially (no parallelism)
+    // Use this when API rate limits are a concern
     // -------------------------------------------------------
     {
       "label": "HW Formal: Generate SVA (all, sequential)",
@@ -78,7 +78,7 @@
     },
 
     // -------------------------------------------------------
-    // 仕様書 (PDF/DOCX) から要件を抽出して YAML を生成
+    // Extract requirements from a spec file (PDF/DOCX) and generate YAML
     // -------------------------------------------------------
     {
       "label": "HW Formal: Extract from spec (active file)",
@@ -100,7 +100,7 @@
     },
 
     // -------------------------------------------------------
-    // 仕様書 → YAML 抽出 → SVA 生成 をワンショットで実行
+    // Run spec extraction → YAML generation → SVA generation in one shot
     // -------------------------------------------------------
     {
       "label": "HW Formal: Extract + Generate (active file)",
@@ -123,8 +123,8 @@
     },
 
     // -------------------------------------------------------
-    // Python 依存パッケージのインストール
-    // 初回セットアップ用
+    // Install Python package dependencies
+    // For initial setup
     // -------------------------------------------------------
     {
       "label": "HW Formal: Install dependencies",

@@ -1,20 +1,20 @@
 // ============================================================
-// [テスト] Arbiter SVA — Formal (non-determinism)
-// スニペット: sva-fml-arbiter-helper + sva-fml-arbiter を展開したサンプル
+// [Test] Arbiter SVA — Formal (non-determinism)
+// Sample showing expansion of snippets: sva-fml-arbiter-helper + sva-fml-arbiter
 // ============================================================
 
 // --- Copilot Chat Test ---
-// Copilot Chat (Cmd+Shift+I) に以下をコピペして試す:
+// Copy and paste the following into Copilot Chat (Cmd+Shift+I) to try:
 //
-//   【フォーマル検証用】
-//   4 port アービターの mutual exclusion, no spurious grant,
-//   starvation-freedom を検証する SVA と Verilog helper を生成して。
-//   信号名: req[3:0], gnt[3:0]
-//   最大待機サイクル: 16
-//   クロック: clk, リセット: rst_n (active-low)
+//   [Formal Verification]
+//   Generate SVA and a Verilog helper to verify mutual exclusion,
+//   no spurious grant, and starvation-freedom for a 4-port arbiter.
+//   Signal names: req[3:0], gnt[3:0]
+//   Maximum wait cycles: 16
+//   Clock: clk, reset: rst_n (active-low)
 
 // ============================================================
-// 期待される生成結果（スニペット sva-fml-arbiter 展開後の形）
+// Expected generated output (form after expanding snippet sva-fml-arbiter)
 // ============================================================
 
 // 1. Safety
