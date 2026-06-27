@@ -49,12 +49,12 @@
   // ここに直接書かず、OS の環境変数か .env で管理することを推奨
   // -------------------------------------------------------
   "terminal.integrated.env.osx": {
-    // "ANTHROPIC_API_KEY": "sk-ant-..."   ← コメントを外してキーを設定
+    "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
   },
   "terminal.integrated.env.linux": {
-    // "ANTHROPIC_API_KEY": "sk-ant-..."
+    "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
   },
   "terminal.integrated.env.windows": {
-    // "ANTHROPIC_API_KEY": "sk-ant-..."
+    "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}"
   }
 }

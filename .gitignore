@@ -1,0 +1,13 @@
+# Generated SVA output
+generated/
+
+# Debug output from scripts
+.debug_*.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# API key — settings.json を直接書き換えた場合は必ずここに追加
+# .vscode/settings.json
