@@ -123,6 +123,28 @@
     },
 
     // -------------------------------------------------------
+    // Extract text from PDF/Word → .txt (no API key required)
+    // Open the .txt in VS Code, then use Copilot Chat with #file:
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Extract text (PDF/Word → txt)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/extract_text.py",
+        "${file}",
+        "--output", "${workspaceFolder}/requirements"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+
+    // -------------------------------------------------------
     // Install Python package dependencies
     // For initial setup
     // -------------------------------------------------------
