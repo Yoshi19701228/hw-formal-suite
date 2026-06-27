@@ -1,0 +1,34 @@
+# APB3 slave formal verification requirements
+name: apb3_slave_check
+dut_module: apb3_slave
+mode: formal
+package: apb3
+
+signals:
+  clk:     PCLK
+  rst_n:   PRESETn
+  psel:    PSEL
+  penable: PENABLE
+  pwrite:  PWRITE
+  paddr:   PADDR
+  pwdata:  PWDATA
+  pready:  PREADY
+  prdata:  PRDATA
+  pslverr: PSLVERR
+
+parameters:
+  ADDR_W:   32
+  DATA_W:   32
+  MAX_WAIT: 16
+
+requirements:
+  - PENABLE must assert exactly one cycle after PSEL asserts
+  - PENABLE must not assert without PSEL being asserted
+  - PADDR, PWRITE, and PWDATA must remain stable from PSEL assertion through the end of the transfer
+  - PREADY must assert within MAX_WAIT cycles of PENABLE asserting
+  - PSLVERR is only valid when PSEL, PENABLE, and PREADY are all asserted simultaneously
+  - PENABLE must deassert the cycle after PREADY asserts (transfer completes)
+
+output:
+  dir: generated/apb3_slave/
+  wrapper: true

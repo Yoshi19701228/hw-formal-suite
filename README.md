@@ -5,9 +5,77 @@ Supports both **Simulator** and **Formal Verification** modes.
 
 ---
 
-## Setup
+## Auto-generate from Requirements (CLI)
+
+YAML ファイルに要件を記述するだけで、Claude API が SVA ファイルを自動生成・保存します。
+
+### セットアップ
+
+```bash
+pip install -r scripts/requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### 使い方
+
+```bash
+# 単一 DUT
+python scripts/generate.py requirements/apb3_slave.yaml
+
+# 複数 DUT を並列処理
+python scripts/generate.py requirements/*.yaml --parallel 4
+
+# 出力先を指定
+python scripts/generate.py requirements/axi4_master.yaml --output generated/ --verbose
+```
+
+### 要件ファイルの書き方 (`requirements/*.yaml`)
+
+```yaml
+name: apb3_slave_check
+dut_module: apb3_slave       # DUT のモジュール名
+mode: formal                 # formal | simulator
+package: apb3                # 参照パッケージ (省略可)
+
+signals:                     # assertion port名: DUT内の信号名
+  clk:     PCLK
+  rst_n:   PRESETn
+  psel:    PSEL
+  penable: PENABLE
+  pready:  PREADY
+
+parameters:
+  ADDR_W: 32
+  DATA_W: 32
+
+requirements:                # 自然言語で検証したい条件を列挙
+  - PENABLE must assert exactly one cycle after PSEL
+  - PREADY must assert within 16 cycles of PENABLE
+  - PSLVERR is only valid when PSEL, PENABLE, PREADY are all asserted
+
+output:
+  dir: generated/apb3_slave/ # 出力先
+  wrapper: true              # formal_top.sv も生成する
+```
+
+### 出力ファイル
+
+```
+generated/
+  apb3_slave/
+    apb3_helper.v          ← Verilog ヘルパー (タイムアウトカウンタ等)
+    apb3_assert_fml.sv     ← SVA アサーション
+    formal_top.sv          ← Jasper / SymbiYosys 用ラッパー
+```
+
+サンプル要件ファイルは `requirements/` を参照してください。
+
+---
+
+## Setup (VS Code + GitHub Copilot)
 
 1. Open the `hw-formal-suite/` folder in VS Code (**folder**, not a single file)
+
 2. Install recommended extensions when prompted (see below)
 3. `.github/copilot-instructions.md` is loaded automatically by Copilot ✅
 

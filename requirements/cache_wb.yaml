@@ -1,0 +1,46 @@
+# Write-back cache formal verification requirements
+name: cache_wb_check
+dut_module: cache_top
+mode: formal
+package: cache
+
+signals:
+  clk:      clk
+  rst_n:    rst_n
+  cpu_req:  cpu_req
+  cpu_addr: cpu_addr
+  cpu_we:   cpu_we
+  cpu_wdata: cpu_wdata
+  cpu_rdata: cpu_rdata
+  cpu_ack:  cpu_ack
+  cpu_hit:  cpu_hit
+  cpu_miss: cpu_miss
+  mem_req:  mem_req
+  mem_addr: mem_addr
+  mem_we:   mem_we
+  mem_wdata: mem_wdata
+  mem_rdata: mem_rdata
+  mem_ack:  mem_ack
+
+parameters:
+  ADDR_W:          32
+  DATA_W:          32
+  LINE_W:          256
+  MAX_MISS_CYCLES: 64
+  MAX_WB_CYCLES:   32
+  WRITE_POLICY:    WRITE_BACK
+
+requirements:
+  - On a cache hit for any address, the data returned must equal the last value written to that address (Data Value Invariant)
+  - A cache hit must only occur if the cache line is valid for that address (no spurious hits)
+  - cpu_hit and cpu_miss must never be asserted simultaneously for the same request
+  - After a store to an address, the next load to the same address must return the stored value (read-after-write)
+  - When a dirty cache line is evicted, the writeback data sent to memory must equal the last stored value (writeback completeness)
+  - A dirty eviction must trigger a writeback request before or when the replacement occurs
+  - A cache miss must be resolved (cpu_ack received) within MAX_MISS_CYCLES cycles
+  - A writeback must complete within MAX_WB_CYCLES cycles
+  - cpu_ack must not assert during reset
+
+output:
+  dir: generated/cache_wb/
+  wrapper: true

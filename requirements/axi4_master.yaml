@@ -1,0 +1,57 @@
+# AXI4 master formal verification requirements
+name: axi4_master_check
+dut_module: axi4_master
+mode: formal
+package: axi4
+
+signals:
+  clk:     aclk
+  rst_n:   aresetn
+  awvalid: awvalid
+  awready: awready
+  awaddr:  awaddr
+  awlen:   awlen
+  awsize:  awsize
+  awburst: awburst
+  wvalid:  wvalid
+  wready:  wready
+  wdata:   wdata
+  wstrb:   wstrb
+  wlast:   wlast
+  bvalid:  bvalid
+  bready:  bready
+  bresp:   bresp
+  arvalid: arvalid
+  arready: arready
+  araddr:  araddr
+  arlen:   arlen
+  arsize:  arsize
+  arburst: arburst
+  rvalid:  rvalid
+  rready:  rready
+  rdata:   rdata
+  rresp:   rresp
+  rlast:   rlast
+
+parameters:
+  ADDR_W:         32
+  DATA_W:         64
+  ID_W:           4
+  MAX_WAIT:       256
+  MAX_OUTSTANDING: 16
+
+requirements:
+  - All xVALID signals must remain stable until the corresponding xREADY asserts (handshake)
+  - All channel signals (AWADDR, AWLEN, etc.) must remain stable while AWVALID is high and AWREADY is low
+  - AWSIZE must encode a transfer size no larger than the data bus width (DATA_W/8 bytes)
+  - AWBURST must be FIXED (0), INCR (1), or WRAP (2) only
+  - For WRAP bursts, AWLEN must be 1, 3, 7, or 15 (2/4/8/16 beats)
+  - WLAST must assert on the beat corresponding to the last beat indicated by AWLEN
+  - BRESP and RRESP must be a legal AXI4 response code (OKAY/EXOKAY/SLVERR/DECERR)
+  - All VALID signals must be deasserted during reset
+  - Number of outstanding write transactions must not exceed MAX_OUTSTANDING
+  - Each channel handshake must complete within MAX_WAIT cycles
+
+output:
+  dir: generated/axi4_master/
+  wrapper: true
