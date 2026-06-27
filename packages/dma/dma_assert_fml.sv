@@ -2,6 +2,9 @@
 // Formal verification assertion module for DMA controller.
 // Order: assert (safety) -> cover (reachability) -> assume (environment).
 // No $error; intended for formal property checking tools (Jasper, SymbiYosys, etc.).
+//
+// Usage (bind):
+//   bind <dut_module> dma_assert_fml #(...) u_fml (.*);
 
 module dma_assert_fml
   import dma_pkg::*;
@@ -26,21 +29,102 @@ module dma_assert_fml
   input wire                            bus_req,
   input wire                            bus_ack,
   input wire                            dma_done,
-  input wire [DATA_W-1:0]              bus_wdata,
-
-  // Helper outputs
-  input wire [$clog2(MAX_BURST+1)-1:0] chosen_beat,
-  input wire [$clog2(MAX_BURST+1)-1:0] beat_cnt,
-  input wire [ADDR_W-1:0]              expected_src_addr,
-  input wire [ADDR_W-1:0]              expected_dst_addr,
-  input wire                            beat_timeout,
-  input wire                            xfer_timeout
+  input wire [DATA_W-1:0]              bus_wdata
 );
+
+  // ============================================================
+  // [Helper Logic] — beat counter, address tracking, timeouts
+  //   (inlined from dma_helper.v)
+  // ============================================================
+  localparam int STRIDE      = DATA_W / 8;
+  localparam int BEAT_W      = $clog2(MAX_BURST+1);
+  localparam int BEAT_CTR_W  = $clog2(MAX_BEAT+1);
+  localparam int XFER_CTR_W  = $clog2(MAX_XFER+1);
+
+  // chosen_beat: non-deterministic constant selected by formal tool
+  (* anyconst *) reg [BEAT_W-1:0] chosen_beat_r;
+  wire [$clog2(MAX_BURST+1)-1:0] chosen_beat = chosen_beat_r;
+
+  // Expected addresses (combinatorial)
+  wire [ADDR_W-1:0] expected_src_addr = desc_src_addr + ({{(ADDR_W-BEAT_W){1'b0}}, chosen_beat} * STRIDE);
+  wire [ADDR_W-1:0] expected_dst_addr = desc_dst_addr + ({{(ADDR_W-BEAT_W){1'b0}}, chosen_beat} * STRIDE);
+
+  // beat_cnt: counts completed bus beats; resets on dma_start
+  reg  [$clog2(MAX_BURST+1)-1:0] beat_cnt;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      beat_cnt <= {BEAT_W{1'b0}};
+    end else if (dma_start) begin
+      beat_cnt <= {BEAT_W{1'b0}};
+    end else if (bus_req && bus_ack) begin
+      beat_cnt <= beat_cnt + 1'b1;
+    end
+  end
+
+  // addr_mismatch: flag when beat chosen_beat completes with wrong address.
+  reg addr_mismatch;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      addr_mismatch <= 1'b0;
+    end else if (bus_req && bus_ack && (beat_cnt == chosen_beat)) begin
+      addr_mismatch <= (bus_addr != expected_src_addr) && (bus_addr != expected_dst_addr);
+    end else begin
+      addr_mismatch <= 1'b0;
+    end
+  end
+
+  // cnt_beat: cycles waiting for current beat ack
+  reg  [BEAT_CTR_W-1:0] cnt_beat;
+  reg                    beat_timeout;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_beat     <= {BEAT_CTR_W{1'b0}};
+      beat_timeout <= 1'b0;
+    end else if (bus_ack || !bus_req) begin
+      cnt_beat     <= {BEAT_CTR_W{1'b0}};
+      beat_timeout <= 1'b0;
+    end else if (bus_req) begin
+      if (cnt_beat < MAX_BEAT - 1) begin
+        cnt_beat <= cnt_beat + 1'b1;
+      end else begin
+        beat_timeout <= 1'b1;
+      end
+    end
+  end
+
+  // cnt_xfer: cycles from dma_start until dma_done
+  reg  [XFER_CTR_W-1:0] cnt_xfer;
+  reg                    xfer_timeout;
+  reg                    xfer_active;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_xfer     <= {XFER_CTR_W{1'b0}};
+      xfer_timeout <= 1'b0;
+      xfer_active  <= 1'b0;
+    end else if (dma_done) begin
+      cnt_xfer     <= {XFER_CTR_W{1'b0}};
+      xfer_timeout <= 1'b0;
+      xfer_active  <= 1'b0;
+    end else if (dma_start) begin
+      cnt_xfer     <= {XFER_CTR_W{1'b0}};
+      xfer_timeout <= 1'b0;
+      xfer_active  <= 1'b1;
+    end else if (xfer_active) begin
+      if (cnt_xfer < MAX_XFER - 1) begin
+        cnt_xfer <= cnt_xfer + 1'b1;
+      end else begin
+        xfer_timeout <= 1'b1;
+      end
+    end
+  end
 
   // -----------------------------------------------------------------------
   // Local parameters
   // -----------------------------------------------------------------------
-  localparam int STRIDE = DATA_W / 8;
 
   // -----------------------------------------------------------------------
   // Default clocking and reset

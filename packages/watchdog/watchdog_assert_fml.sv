@@ -2,6 +2,9 @@
 // Formal verification assertion module for watchdog timer.
 // Order: assert (safety) -> cover (reachability) -> assume (environment).
 // No $error; intended for formal property checking tools (Jasper, SymbiYosys, etc.).
+//
+// Usage (bind):
+//   bind <dut_module> watchdog_assert_fml #(...) u_fml (.*);
 
 module watchdog_assert_fml
   import watchdog_pkg::*;
@@ -20,14 +23,72 @@ module watchdog_assert_fml
 
   // DUT outputs
   input wire              wdt_expired,
-  input wire              wdt_ack,
-
-  // Helper outputs
-  input wire [CTR_W-1:0] shadow_cnt,
-  input wire              true_timeout,
-  input wire              false_positive,
-  input wire              false_negative
+  input wire              wdt_ack
 );
+
+  // ============================================================
+  // [Helper Logic] — shadow counter and correctness flags
+  //   (inlined from watchdog_helper.v)
+  // ============================================================
+
+  // shadow_cnt: increments every cycle while the watchdog is enabled.
+  // Resets on kick, on disable, or on reset.
+  reg  [CTR_W-1:0] shadow_cnt;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      shadow_cnt <= {CTR_W{1'b0}};
+    end else if (!wdt_en || wdt_kick) begin
+      shadow_cnt <= {CTR_W{1'b0}};
+    end else begin
+      // Saturate at MAX_TIMEOUT to avoid wrap-around
+      if (shadow_cnt < wdt_timeout_val) begin
+        shadow_cnt <= shadow_cnt + 1'b1;
+      end
+    end
+  end
+
+  // true_timeout: shadow counter has reached the configured timeout value.
+  // Registered to align with DUT expiry (which is also registered).
+  reg  true_timeout;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      true_timeout <= 1'b0;
+    end else if (!wdt_en || wdt_kick) begin
+      true_timeout <= 1'b0;
+    end else begin
+      true_timeout <= (shadow_cnt >= wdt_timeout_val);
+    end
+  end
+
+  // false_positive: DUT asserted wdt_expired before the shadow counter
+  // reached wdt_timeout_val.
+  reg  false_positive;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      false_positive <= 1'b0;
+    end else begin
+      false_positive <= wdt_expired && (shadow_cnt < wdt_timeout_val) && wdt_en;
+    end
+  end
+
+  // false_negative: one cycle after true_timeout was set, the DUT should
+  // have asserted wdt_expired. If it has not, that is a false negative.
+  // Delayed by 1 cycle to give the DUT a clock edge to respond.
+  reg  true_timeout_d1;
+  reg  false_negative;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      true_timeout_d1 <= 1'b0;
+      false_negative  <= 1'b0;
+    end else begin
+      true_timeout_d1 <= true_timeout;
+      false_negative  <= true_timeout_d1 && !wdt_expired && wdt_en;
+    end
+  end
 
   // -----------------------------------------------------------------------
   // Default clocking and reset

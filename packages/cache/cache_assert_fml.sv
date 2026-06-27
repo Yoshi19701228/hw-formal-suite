@@ -4,7 +4,7 @@
 // Verification strategy:
 //   1. $anyconst selects one address (chosen_addr) for the proof.
 //      The formal solver proves every property holds for ANY address.
-//   2. Ghost state (cache_helper) tracks the authoritative "golden"
+//   2. Internal ghost state tracks the authoritative "golden"
 //      value for chosen_addr independently of the DUT.
 //   3. Assertions compare DUT output against the ghost state.
 //
@@ -16,16 +16,8 @@
 //   [MISS] Miss timeout          — refill completes in bounded cycles
 //   [WBT]  Writeback timeout     — writeback completes in bounded cycles
 //
-// Usage:
-//   cache_helper #(.ADDR_W(32), .DATA_W(32)) u_hlp (
-//     .clk, .rst_n,
-//     .cpu_req, .cpu_addr, .cpu_we, .cpu_wdata,
-//     .cpu_rdata, .cpu_ack, .cpu_hit, .cpu_miss,
-//     .mem_req, .mem_addr, .mem_we, .mem_wdata, .mem_rdata, .mem_ack,
-//     .chosen_addr, .golden_data, .golden_valid, .golden_dirty,
-//     .miss_timeout, .wb_timeout
-//   );
-//   cache_assert_fml #(.ADDR_W(32), .DATA_W(32)) u_fml (.*);
+// Usage (bind):
+//   bind <dut_module> cache_assert_fml #(.ADDR_W(32), .DATA_W(32)) u_fml (.*);
 // ============================================================
 module cache_assert_fml
   import cache_pkg::*;
@@ -54,16 +46,95 @@ module cache_assert_fml
   input logic              mem_we,
   input logic [LINE_W-1:0] mem_wdata,
   input logic [LINE_W-1:0] mem_rdata,
-  input logic              mem_ack,
-
-  // From cache_helper
-  input logic [ADDR_W-1:0] chosen_addr,
-  input logic [DATA_W-1:0] golden_data,
-  input logic              golden_valid,
-  input logic              golden_dirty,
-  input logic              miss_timeout,
-  input logic              wb_timeout
+  input logic              mem_ack
 );
+
+  // ============================================================
+  // [Helper Logic] — ghost state and timeout counters
+  //   (inlined from cache_helper.v)
+  // ============================================================
+
+  // Non-deterministic address selection
+  // The formal solver assigns one fixed address for the entire
+  // proof — equivalent to "for all addresses".
+  wire [ADDR_W-1:0] chosen_addr;
+  assign chosen_addr = $anyconst;
+
+  // Ghost State — golden_data
+  wire cpu_store_chosen = cpu_req && cpu_we  && cpu_ack &&
+                          (cpu_addr == chosen_addr);
+  wire refill_chosen    = mem_req && !mem_we && mem_ack &&
+                          (mem_addr == chosen_addr);
+
+  reg  [DATA_W-1:0] golden_data;
+  reg               golden_valid;
+  reg               golden_dirty;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      golden_data  <= '0;
+      golden_valid <= 1'b0;
+      golden_dirty <= 1'b0;
+    end else begin
+      // Store: update golden_data and mark dirty (write-back policy)
+      if (cpu_store_chosen) begin
+        golden_data  <= cpu_wdata;
+        golden_valid <= 1'b1;
+        golden_dirty <= 1'b1;   // write-back: dirty until eviction WB
+      end
+
+      // Refill: memory delivered chosen_addr data into cache
+      // (DATA_W slice of LINE_W; take lower bits as approximation)
+      if (refill_chosen && !cpu_store_chosen) begin
+        golden_data  <= mem_rdata[DATA_W-1:0];
+        golden_valid <= 1'b1;
+        golden_dirty <= 1'b0;
+      end
+
+      // Writeback completion: chosen_addr flushed — mark invalid
+      if (mem_req && mem_we && mem_ack && (mem_addr == chosen_addr))
+        golden_dirty <= 1'b0;
+
+      // Cache invalidation (e.g., flush / eviction of clean line)
+      // Detected indirectly: if miss fires for chosen_addr, it was evicted
+      if (cpu_req && !cpu_we && cpu_miss && (cpu_addr == chosen_addr))
+        golden_valid <= 1'b0;
+    end
+  end
+
+  // Timeout counters
+  reg [$clog2(64+1)-1:0] cnt_miss;
+  reg [$clog2(32+1)-1:0] cnt_wb;
+  reg                    miss_timeout;
+  reg                    wb_timeout;
+
+  // Miss timeout: cpu_miss asserted but mem_ack (refill) not arriving
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_miss    <= '0;
+      miss_timeout <= 1'b0;
+    end else begin
+      if (cpu_miss && !mem_ack)
+        cnt_miss <= cnt_miss + 1;
+      else
+        cnt_miss <= '0;
+      miss_timeout <= (cnt_miss >= 64 - 1) && cpu_miss && !mem_ack;
+    end
+  end
+
+  // Writeback timeout: mem_req (write) asserted but mem_ack not arriving
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_wb     <= '0;
+      wb_timeout <= 1'b0;
+    end else begin
+      if (mem_req && mem_we && !mem_ack)
+        cnt_wb <= cnt_wb + 1;
+      else
+        cnt_wb <= '0;
+      wb_timeout <= (cnt_wb >= 32 - 1) && mem_req && mem_we && !mem_ack;
+    end
+  end
 
   // ----------------------------------------------------------
   // 1. Safety

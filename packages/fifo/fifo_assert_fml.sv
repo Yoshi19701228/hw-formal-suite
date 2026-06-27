@@ -1,20 +1,10 @@
 // ============================================================
 // FIFO Assertion Module — Formal Verification
-// Uses shadow counter and flags from fifo_helper for
+// Uses shadow counter and flags for
 // BMC / k-induction without unbounded sequence operators.
 //
-// Usage:
-//   1. Instantiate fifo_helper and connect its outputs here.
-//   2. Bind or instantiate alongside DUT.
-//
-//   fifo_helper #(.DEPTH(16), .DATA_W(32)) u_hlp (
-//     .clk, .rst_n, .push, .pop, .wdata, .count,
-//     .full, .empty, .almost_full, .almost_empty,
-//     .chosen_entry, .shadow_count,
-//     .count_mismatch, .overflow_flag, .underflow_flag
-//   );
-//   fifo_assert_fml #(.DEPTH(16), .DATA_W(32), .ALMOST_THRESH(2))
-//     u_fml (.*);
+// Usage (bind):
+//   bind <dut_module> fifo_assert_fml #(.DEPTH(16), .DATA_W(32), .ALMOST_THRESH(2)) u_fml (.*);
 // ============================================================
 module fifo_assert_fml
   import fifo_pkg::*;
@@ -37,15 +27,61 @@ module fifo_assert_fml
   input logic                        empty,
   input logic                        almost_full,
   input logic                        almost_empty,
-  input logic [$clog2(DEPTH):0]      count,
-
-  // From fifo_helper
-  input logic [$clog2(DEPTH)-1:0]    chosen_entry,
-  input logic [$clog2(DEPTH+1)-1:0]  shadow_count,
-  input logic                        count_mismatch,
-  input logic                        overflow_flag,
-  input logic                        underflow_flag
+  input logic [$clog2(DEPTH):0]      count
 );
+
+  // ============================================================
+  // [Helper Logic] — shadow counter, overflow/underflow flags,
+  //   and $anyconst chosen_entry index
+  //   (inlined from fifo_helper.v)
+  // ============================================================
+
+  // chosen_entry: non-deterministic but fixed for the entire run.
+  (* anyconst *) reg [$clog2(DEPTH)-1:0] chosen_entry_r;
+  wire [$clog2(DEPTH)-1:0] chosen_entry = chosen_entry_r;
+
+  // Shadow counter: mirrors the expected fill level
+  localparam int CNT_W = $clog2(DEPTH + 1);
+
+  reg [$clog2(DEPTH+1)-1:0] shadow_count;
+  reg                        count_mismatch;
+  reg                        first_cycle;
+  reg                        overflow_flag;
+  reg                        underflow_flag;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      shadow_count   <= '0;
+      count_mismatch <= 1'b0;
+      first_cycle    <= 1'b1;
+    end else begin
+      first_cycle <= 1'b0;
+
+      // Update shadow counter based on push/pop activity
+      casez ({push && !full, pop && !empty})
+        2'b10: shadow_count <= shadow_count + 1;
+        2'b01: shadow_count <= shadow_count - 1;
+        default: shadow_count <= shadow_count; // 2'b00 or simultaneous push+pop
+      endcase
+
+      // Detect mismatch (ignore first cycle after reset)
+      if (!first_cycle)
+        count_mismatch <= (shadow_count != count[$clog2(DEPTH+1)-1:0]);
+      else
+        count_mismatch <= 1'b0;
+    end
+  end
+
+  // Protocol violation flags (registered for timing alignment)
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      overflow_flag  <= 1'b0;
+      underflow_flag <= 1'b0;
+    end else begin
+      overflow_flag  <= push && full;
+      underflow_flag <= pop  && empty;
+    end
+  end
 
   // ----------------------------------------------------------
   // 1. Safety assertions

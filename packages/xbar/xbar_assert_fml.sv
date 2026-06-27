@@ -3,6 +3,9 @@
 // Instantiate (or bind) alongside the DUT.
 // Order: assert (safety) -> cover (reachability) -> assume (environment).
 // No $error calls — this module targets formal property checking only.
+//
+// Usage (bind):
+//   bind <dut_module> xbar_assert_fml #(...) u_fml (.*);
 
 `default_nettype none
 
@@ -28,15 +31,77 @@ module xbar_assert_fml
 
   // Slave-side signals
   input wire [N_SLAVES-1:0]         s_req,
-  input wire [N_SLAVES-1:0]         s_ack,
-
-  // Signals from xbar_helper
-  input wire [MASTER_BITS-1:0]      chosen_master,
-  input wire [SLAVE_BITS-1:0]       chosen_slave,
-  input wire                        routing_timeout,
-  input wire [OUT_BITS-1:0]         outstanding_cnt,
-  input wire                        outstanding_overflow
+  input wire [N_SLAVES-1:0]         s_ack
 );
+
+  // ============================================================
+  // [Helper Logic] — chosen_master/slave selection, latency
+  //   counter, outstanding transaction counter
+  //   (inlined from xbar_helper.v)
+  // ============================================================
+
+  // Non-deterministic symbolic constants
+  wire [MASTER_BITS-1:0] chosen_master;
+  wire [SLAVE_BITS-1:0]  chosen_slave;
+  assign chosen_master = $anyconst;
+  assign chosen_slave  = $anyconst;
+
+  // Latency counter for chosen_master
+  localparam int LAT_BITS = $clog2(MAX_LATENCY + 1);
+
+  reg  [LAT_BITS-1:0] cnt_latency;
+  reg                 routing_timeout;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_latency     <= {LAT_BITS{1'b0}};
+      routing_timeout <= 1'b0;
+    end else begin
+      if (m_req[chosen_master] && !m_ack[chosen_master]) begin
+        // Request pending but not yet acked; increment, saturate at MAX_LATENCY
+        if (cnt_latency < MAX_LATENCY[LAT_BITS-1:0])
+          cnt_latency <= cnt_latency + 1'b1;
+      end else begin
+        // Acked or no request: clear counter
+        cnt_latency <= {LAT_BITS{1'b0}};
+      end
+
+      // Timeout fires when latency reaches the threshold
+      routing_timeout <= (cnt_latency >= (MAX_LATENCY - 1));
+    end
+  end
+
+  // Outstanding transaction counter
+  wire any_accepted  = |(m_req & m_ack);
+  wire any_completed = |s_ack;
+
+  reg  [OUT_BITS-1:0] outstanding_cnt;
+  reg                 outstanding_overflow;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      outstanding_cnt      <= {OUT_BITS{1'b0}};
+      outstanding_overflow <= 1'b0;
+    end else begin
+      case ({any_accepted, any_completed})
+        2'b10: begin
+          // Transaction accepted, none completed this cycle
+          if (outstanding_cnt < MAX_OUTSTANDING[OUT_BITS-1:0])
+            outstanding_cnt <= outstanding_cnt + 1'b1;
+        end
+        2'b01: begin
+          // Transaction completed, none accepted this cycle
+          if (outstanding_cnt > {OUT_BITS{1'b0}})
+            outstanding_cnt <= outstanding_cnt - 1'b1;
+        end
+        2'b11: ; // One in, one out: net zero change
+        default: ; // 2'b00: no activity
+      endcase
+
+      // Overflow flag: count has reached or exceeded the limit
+      outstanding_overflow <= (outstanding_cnt >= MAX_OUTSTANDING[OUT_BITS-1:0]);
+    end
+  end
 
   // Convenience: unpack the destination for chosen_master
   wire [SLAVE_BITS-1:0] chosen_master_dst =

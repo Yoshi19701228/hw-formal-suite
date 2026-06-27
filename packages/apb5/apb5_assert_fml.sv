@@ -2,19 +2,9 @@
 // APB5 Assertion Module — Formal Verification
 // Spec: AMBA 5 APB Protocol Specification (ARM IHI0024F)
 //
-// Usage:
-//   1. Instantiate apb5_helper and connect outputs to this module.
-//   2. Bind or instantiate alongside DUT.
-//
-//   apb5_helper #(.DATA_W(32), .USER_W(4), .MAX_WAIT(16), .MAX_WAKEUP(8)) u_hlp (
-//     .clk, .rst_n, .psel, .penable, .pwrite, .pstrb, .pprot, .pready,
-//     .pwakeup, .pauser, .pwuser,
-//     .cnt_pready_wait, .pready_timeout,
-//     .cnt_wakeup, .wakeup_timeout,
-//     .pauser_changed, .pwuser_changed
-//   );
-//   apb5_assert_fml #(.ADDR_W(32), .DATA_W(32), .USER_W(4),
-//                     .MAX_WAIT(16), .MAX_WAKEUP(8)) u_fml (.*);
+// Usage (bind):
+//   bind <dut_module> apb5_assert_fml #(.ADDR_W(32), .DATA_W(32), .USER_W(4),
+//     .MAX_WAIT(16), .MAX_WAKEUP(8)) u_fml (.*);
 // ============================================================
 module apb5_assert_fml
   import apb5_pkg::*;
@@ -43,13 +33,66 @@ module apb5_assert_fml
   input logic [USER_W-1:0]           pauser,
   input logic [USER_W-1:0]           pwuser,
   input logic [USER_W-1:0]           pruser,
-  input logic [USER_W-1:0]           pbuser,
-  // From apb5_helper
-  input logic                             pready_timeout,
-  input logic                             wakeup_timeout,
-  input logic                             pauser_changed,
-  input logic                             pwuser_changed
+  input logic [USER_W-1:0]           pbuser
 );
+
+  // ============================================================
+  // [Helper Logic] — timeout counters and stability flags
+  //   (inlined from apb5_helper.v)
+  // ============================================================
+  // Previous cycle values for change detection
+  reg [USER_W-1:0] pauser_prev;
+  reg [USER_W-1:0] pwuser_prev;
+
+  reg [$clog2(MAX_WAIT+1)-1:0]   cnt_pready_wait;
+  reg                              pready_timeout;
+  reg [$clog2(MAX_WAKEUP+1)-1:0] cnt_wakeup;
+  reg                              wakeup_timeout;
+  reg                              pauser_changed;
+  reg                              pwuser_changed;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_pready_wait <= {($clog2(MAX_WAIT+1)){1'b0}};
+      pready_timeout  <= 1'b0;
+      cnt_wakeup      <= {($clog2(MAX_WAKEUP+1)){1'b0}};
+      wakeup_timeout  <= 1'b0;
+      pauser_prev     <= {USER_W{1'b0}};
+      pwuser_prev     <= {USER_W{1'b0}};
+      pauser_changed  <= 1'b0;
+      pwuser_changed  <= 1'b0;
+    end else begin
+      // PREADY wait counter: increment during access phase without PREADY
+      if (psel && penable && !pready)
+        cnt_pready_wait <= cnt_pready_wait + 1;
+      else
+        cnt_pready_wait <= {($clog2(MAX_WAIT+1)){1'b0}};
+
+      pready_timeout <= (cnt_pready_wait >= MAX_WAIT - 1) && psel && penable && !pready;
+
+      // Wakeup counter: counts cycles pwakeup is asserted without psel
+      // Resets when psel asserts (wakeup was honored)
+      if (psel) begin
+        cnt_wakeup     <= {($clog2(MAX_WAKEUP+1)){1'b0}};
+        wakeup_timeout <= 1'b0;
+      end else if (pwakeup) begin
+        cnt_wakeup     <= cnt_wakeup + 1;
+        wakeup_timeout <= (cnt_wakeup >= MAX_WAKEUP - 1);
+      end else begin
+        cnt_wakeup     <= {($clog2(MAX_WAKEUP+1)){1'b0}};
+        wakeup_timeout <= 1'b0;
+      end
+
+      // Track pauser stability: flag if pauser changes during setup phase
+      // Setup phase = psel asserted, penable not yet asserted
+      pauser_prev    <= pauser;
+      pauser_changed <= psel && !penable && (pauser != pauser_prev);
+
+      // Track pwuser stability: flag if pwuser changes during write access phase
+      pwuser_prev    <= pwuser;
+      pwuser_changed <= psel && penable && pwrite && (pwuser != pwuser_prev);
+    end
+  end
 
   // ----------------------------------------------------------
   // 1. Safety

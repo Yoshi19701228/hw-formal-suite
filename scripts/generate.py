@@ -51,13 +51,16 @@ When generating files, output EACH file using this exact format:
 === END FILE ===
 
 Use the filename only (no directory prefix). Examples:
-  apb3_helper.v
   apb3_assert_fml.sv
   apb3_formal_top.sv
 
+**Single-file rule:** Helper logic (counters, flags, shift registers) must be defined
+as internal registers and always blocks INSIDE the assertion module — NOT in a separate
+*_helper.v file. One module = helper logic + assertions + cover + assume.
+
 Always generate ALL required files for the requested environment:
-- Formal: *_helper.v + *_assert_fml.sv + *_formal_top.sv (wrapper)
-- Simulator: *_assert_sim.sv
+- Formal: *_assert_fml.sv  (single module with helpers inside) + *_formal_top.sv (optional wrapper)
+- Simulator: *_assert_sim.sv (single module with helpers inside)
 """
     return text
 
@@ -96,6 +99,10 @@ def build_prompt(req: dict) -> str:
 
     if mode == "formal" and wrapper:
         lines.append("\nAlso generate the formal_top wrapper (formal_top.sv).")
+
+    lines.append("\nIMPORTANT: All helper logic (counters, flags, shift registers) must be")
+    lines.append("defined as internal variables inside the assertion module — do NOT generate")
+    lines.append("a separate *_helper.v file.")
 
     lines.append("\nOutput every file using the === FILE / === END FILE === format.")
 

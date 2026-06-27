@@ -3,6 +3,9 @@
 // Instantiate (or bind) alongside the encoder/decoder DUT.
 // Order: assert (safety) -> cover (reachability) -> assume (environment).
 // No $error calls — this module targets formal property checking only.
+//
+// Usage (bind):
+//   bind <dut_module> ecc_assert_fml #(...) u_fml (.*);
 
 `default_nettype none
 
@@ -31,15 +34,48 @@ module ecc_assert_fml
   input wire [DATA_W-1:0]     dec_data_out,
   input wire                  dec_valid,
   input wire                  dec_sec,           // single-error corrected
-  input wire                  dec_ded,           // double-error detected
-
-  // Signals from ecc_helper
-  input wire [BIT_SEL_W-1:0] chosen_bit,
-  input wire [BIT_SEL_W-1:0] chosen_bit2,
-  input wire [DATA_W-1:0]    golden_data,        // enc_data_in delayed by MAX_LATENCY
-  input wire                 single_err_injected, // dec_in == enc_out ^ (1<<chosen_bit)
-  input wire                 double_err_injected  // dec_in == enc_out ^ two bits
+  input wire                  dec_ded            // double-error detected
 );
+
+  // ============================================================
+  // [Helper Logic] — golden data pipeline and error injection
+  //   (inlined from ecc_helper.v)
+  // ============================================================
+
+  // Non-deterministic bit selectors (driven by $anyconst via formal tool)
+  wire [BIT_SEL_W-1:0] chosen_bit;
+  wire [BIT_SEL_W-1:0] chosen_bit2;
+  assign chosen_bit  = $anyconst;
+  assign chosen_bit2 = $anyconst;
+
+  // Golden data: shift-register delay of enc_data_in by MAX_LATENCY cycles.
+  reg [DATA_W-1:0] data_pipe [0:MAX_LATENCY-1];
+  reg [DATA_W-1:0] golden_data;
+  integer i;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      for (i = 0; i < MAX_LATENCY; i = i + 1)
+        data_pipe[i] <= {DATA_W{1'b0}};
+      golden_data <= {DATA_W{1'b0}};
+    end else begin
+      data_pipe[0] <= enc_data_in;
+      for (i = 1; i < MAX_LATENCY; i = i + 1)
+        data_pipe[i] <= data_pipe[i-1];
+      golden_data <= data_pipe[MAX_LATENCY-1];
+    end
+  end
+
+  // Error masks derived from the chosen bit positions.
+  wire [CODEWORD_W-1:0] mask1 = {{(CODEWORD_W-1){1'b0}}, 1'b1} << chosen_bit;
+  wire [CODEWORD_W-1:0] mask2 = {{(CODEWORD_W-1){1'b0}}, 1'b1} << chosen_bit2;
+
+  // Single-error injection: exactly one bit of dec_in differs from enc_out
+  wire single_err_injected = (dec_in == (enc_out ^ mask1));
+
+  // Double-error injection: exactly two bits of dec_in differ from enc_out
+  wire double_err_injected = (dec_in == (enc_out ^ mask1 ^ mask2))
+                           && (chosen_bit != chosen_bit2);
 
   // Default clock and reset for SVA
   default clocking @(posedge clk); endclocking

@@ -1,14 +1,8 @@
 // ============================================================
 // Reset Sequencer Assertion Module — Formal Verification
 //
-// Usage:
-//   1. Instantiate reset_helper and connect outputs to this module.
-//   2. Bind or instantiate alongside DUT.
-//
-//   reset_helper     #(.N_DOMAINS(4), .MIN_PULSE(4), .MAX_PROP(8)) u_hlp (
-//     .clk, .por_n, .rst_out, .chosen_domain,
-//     .cnt_pulse, .pulse_too_short, .sr_por, .prop_timeout);
-//   reset_assert_fml #(.N_DOMAINS(4), .MIN_PULSE(4), .MAX_PROP(8)) u_fml (.*);
+// Usage (bind):
+//   bind <dut_module> reset_assert_fml #(.N_DOMAINS(4), .MIN_PULSE(4), .MAX_PROP(8)) u_fml (.*);
 // ============================================================
 module reset_assert_fml
   import reset_pkg::*;
@@ -19,12 +13,63 @@ module reset_assert_fml
 )(
   input logic                         clk,
   input logic                         por_n,
-  input logic [N_DOMAINS-1:0]         rst_out,
-  // From reset_helper
-  input logic [$clog2(N_DOMAINS)-1:0] chosen_domain,
-  input logic                         pulse_too_short,
-  input logic                         prop_timeout
+  input logic [N_DOMAINS-1:0]         rst_out
 );
+
+  // ============================================================
+  // [Helper Logic] — chosen_domain selection, pulse counter,
+  //   shift register, and propagation timeout
+  //   (inlined from reset_helper.v)
+  // ============================================================
+
+  // Non-deterministic domain selection — held constant by formal engine
+  (* anyconst *) reg [$clog2(N_DOMAINS)-1:0] chosen_domain_r;
+  wire [$clog2(N_DOMAINS)-1:0] chosen_domain = chosen_domain_r;
+
+  // Pulse-width counter for the chosen domain
+  // Increments while rst_out[chosen_domain] is asserted (high)
+  reg  [$clog2(MIN_PULSE+1)-1:0] cnt_pulse;
+  reg                             pulse_too_short;
+
+  always @(posedge clk or negedge por_n) begin
+    if (!por_n) begin
+      cnt_pulse     <= {($clog2(MIN_PULSE+1)){1'b0}};
+      pulse_too_short <= 1'b0;
+    end else begin
+      if (rst_out[chosen_domain_r]) begin
+        if (cnt_pulse < MIN_PULSE)
+          cnt_pulse <= cnt_pulse + 1;
+      end else begin
+        // Detect falling edge of chosen domain reset
+        pulse_too_short <= (cnt_pulse < MIN_PULSE) && (cnt_pulse != 0);
+        cnt_pulse       <= {($clog2(MIN_PULSE+1)){1'b0}};
+      end
+    end
+  end
+
+  // Shift register: tracks how long ago por_n deasserted
+  // sr_por[0] = !por_n one cycle ago, sr_por[MAX_PROP-1] = MAX_PROP cycles ago
+  reg  [MAX_PROP-1:0] sr_por;
+
+  always @(posedge clk or negedge por_n) begin
+    if (!por_n) begin
+      sr_por <= {MAX_PROP{1'b0}};
+    end else begin
+      sr_por <= {sr_por[MAX_PROP-2:0], !por_n};
+    end
+  end
+
+  // prop_timeout: por_n has been high (deasserted) for at least MAX_PROP cycles
+  // but chosen_domain reset is still asserted — DUT is too slow to release it
+  reg  prop_timeout;
+
+  always @(posedge clk or negedge por_n) begin
+    if (!por_n) begin
+      prop_timeout <= 1'b0;
+    end else begin
+      prop_timeout <= sr_por[MAX_PROP-1] && rst_out[chosen_domain_r];
+    end
+  end
 
   // ----------------------------------------------------------
   // 1. Safety

@@ -2,23 +2,8 @@
 // AXI3 Assertion Module — Formal Verification
 // Spec: AMBA AXI Protocol Specification (ARM IHI0022D, rev: AXI3)
 //
-// Usage:
-//   1. Instantiate axi3_helper and connect its outputs here.
-//   2. Bind or instantiate alongside DUT.
-//
-//   axi3_helper #(.DATA_W(32), .MAX_WAIT(256)) u_hlp (
-//     .ACLK(clk), .ARESETn(rst_n),
-//     .AWVALID(awvalid), .AWREADY(awready), .AWLEN(awlen),
-//     .WVALID(wvalid),   .WREADY(wready),   .WLAST(wlast),
-//     .BVALID(bvalid),   .BREADY(bready),
-//     .ARVALID(arvalid), .ARREADY(arready), .ARLEN(arlen),
-//     .RVALID(rvalid),   .RREADY(rready),   .RLAST(rlast),
-//     .aw_timeout, .w_timeout, .b_timeout, .ar_timeout, .r_timeout,
-//     .snap_awlen, .cnt_w_beats, .wlast_mismatch,
-//     .cnt_aw_outstanding, .aw_overflow,
-//     .cnt_ar_outstanding, .ar_overflow
-//   );
-//   axi3_assert_fml #(.ADDR_W(32), .DATA_W(32)) u_fml (.*);
+// Usage (bind):
+//   bind <dut_module> axi3_assert_fml #(.ADDR_W(32), .DATA_W(32)) u_fml (.*);
 // ============================================================
 module axi3_assert_fml
   import axi3_pkg::*;
@@ -72,20 +57,107 @@ module axi3_assert_fml
   input logic [ID_W-1:0]   rid,
   input logic [DATA_W-1:0] rdata,
   input logic [1:0]        rresp,
-  input logic              rlast,
-
-  // From axi3_helper
-  input logic              aw_timeout,
-  input logic              w_timeout,
-  input logic              b_timeout,
-  input logic              ar_timeout,
-  input logic              r_timeout,
-  input logic [3:0]        snap_awlen,
-  input logic [3:0]        cnt_w_beats,
-  input logic              wlast_mismatch,
-  input logic              aw_overflow,
-  input logic              ar_overflow
+  input logic              rlast
 );
+
+  // ============================================================
+  // [Helper Logic] — handshake timeout counters, write beat
+  //   tracking, outstanding transaction counters
+  //   (inlined from axi3_helper.v)
+  // ============================================================
+  reg [$clog2(MAX_WAIT+1)-1:0] cnt_aw, cnt_w, cnt_b, cnt_ar, cnt_r;
+  reg               aw_timeout;
+  reg               w_timeout;
+  reg               b_timeout;
+  reg               ar_timeout;
+  reg               r_timeout;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_aw <= '0; aw_timeout <= 1'b0;
+      cnt_w  <= '0; w_timeout  <= 1'b0;
+      cnt_b  <= '0; b_timeout  <= 1'b0;
+      cnt_ar <= '0; ar_timeout <= 1'b0;
+      cnt_r  <= '0; r_timeout  <= 1'b0;
+    end else begin
+      // AW
+      if (awvalid && !awready) cnt_aw <= cnt_aw + 1; else cnt_aw <= '0;
+      aw_timeout <= (cnt_aw >= MAX_WAIT - 1) && awvalid && !awready;
+      // W
+      if (wvalid  && !wready)  cnt_w  <= cnt_w  + 1; else cnt_w  <= '0;
+      w_timeout  <= (cnt_w  >= MAX_WAIT - 1) && wvalid  && !wready;
+      // B
+      if (bvalid  && !bready)  cnt_b  <= cnt_b  + 1; else cnt_b  <= '0;
+      b_timeout  <= (cnt_b  >= MAX_WAIT - 1) && bvalid  && !bready;
+      // AR
+      if (arvalid && !arready) cnt_ar <= cnt_ar + 1; else cnt_ar <= '0;
+      ar_timeout <= (cnt_ar >= MAX_WAIT - 1) && arvalid && !arready;
+      // R
+      if (rvalid  && !rready)  cnt_r  <= cnt_r  + 1; else cnt_r  <= '0;
+      r_timeout  <= (cnt_r  >= MAX_WAIT - 1) && rvalid  && !rready;
+    end
+  end
+
+  reg  [3:0]        snap_awlen;
+  reg  [3:0]        cnt_w_beats;
+  reg               wlast_mismatch;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      snap_awlen      <= 4'h0;
+      cnt_w_beats     <= 4'h0;
+      wlast_mismatch  <= 1'b0;
+    end else begin
+      if (awvalid && awready)
+        snap_awlen <= awlen;
+
+      if (wvalid && wready) begin
+        if (wlast)
+          cnt_w_beats <= 4'h0;
+        else
+          cnt_w_beats <= cnt_w_beats + 4'h1;
+
+        // WLAST must fire exactly when beat count == AWLEN
+        wlast_mismatch <= wlast && (cnt_w_beats != snap_awlen);
+      end else begin
+        wlast_mismatch <= 1'b0;
+      end
+    end
+  end
+
+  reg  [$clog2(MAX_OUTSTANDING+1)-1:0] cnt_aw_outstanding;
+  reg               aw_overflow;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_aw_outstanding <= '0;
+      aw_overflow        <= 1'b0;
+    end else begin
+      case ({awvalid && awready, bvalid && bready})
+        2'b10: cnt_aw_outstanding <= cnt_aw_outstanding + 1;
+        2'b01: cnt_aw_outstanding <= cnt_aw_outstanding - 1;
+        default: ;
+      endcase
+      aw_overflow <= (cnt_aw_outstanding >= MAX_OUTSTANDING) && awvalid && awready;
+    end
+  end
+
+  reg  [$clog2(MAX_OUTSTANDING+1)-1:0] cnt_ar_outstanding;
+  reg               ar_overflow;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_ar_outstanding <= '0;
+      ar_overflow        <= 1'b0;
+    end else begin
+      case ({arvalid && arready, rvalid && rready && rlast})
+        2'b10: cnt_ar_outstanding <= cnt_ar_outstanding + 1;
+        2'b01: cnt_ar_outstanding <= cnt_ar_outstanding - 1;
+        default: ;
+      endcase
+      ar_overflow <= (cnt_ar_outstanding >= MAX_OUTSTANDING) && arvalid && arready;
+    end
+  end
 
   // ----------------------------------------------------------
   // 1. Safety

@@ -2,16 +2,8 @@
 // CDC Assertion Module — Formal Verification
 // Verifies clock-domain crossing synchronizer correctness.
 //
-// Usage:
-//   1. Instantiate cdc_helper and connect its outputs here.
-//   2. Bind or instantiate alongside DUT.
-//
-//   cdc_helper #(.SYNC_STAGES(2)) u_hlp (
-//     .src_clk, .dst_clk, .rst_n,
-//     .src_data, .dst_synced,
-//     .uncertain_window, .settled, .sync_timeout
-//   );
-//   cdc_assert_fml #(.SYNC_STAGES(2), .DATA_W(1)) u_fml (.*);
+// Usage (bind):
+//   bind <dut_module> cdc_assert_fml #(.SYNC_STAGES(2), .DATA_W(1)) u_fml (.*);
 // ============================================================
 module cdc_assert_fml
   import cdc_pkg::*;
@@ -25,13 +17,121 @@ module cdc_assert_fml
 
   // Signal crossing the clock domain
   input logic src_data,
-  input logic dst_synced,
-
-  // From cdc_helper
-  input logic uncertain_window,
-  input logic settled,
-  input logic sync_timeout
+  input logic dst_synced
 );
+
+  // ============================================================
+  // [Helper Logic] — uncertainty window, settled detection,
+  //   sync timeout counter
+  //   (inlined from cdc_helper.v)
+  // ============================================================
+
+  // Source-domain: detect transitions on src_data
+  reg  src_data_prev;
+  reg  src_changed_pulse; // single src_clk pulse on change
+
+  always @(posedge src_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      src_data_prev    <= 1'b0;
+      src_changed_pulse <= 1'b0;
+    end else begin
+      src_data_prev     <= src_data;
+      src_changed_pulse <= (src_data != src_data_prev);
+    end
+  end
+
+  // Transfer change flag to dst_clk domain via 2-FF sync
+  reg change_sync1, change_sync2;
+
+  always @(posedge dst_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      change_sync1 <= 1'b0;
+      change_sync2 <= 1'b0;
+    end else begin
+      change_sync1 <= src_changed_pulse;
+      change_sync2 <= change_sync1;
+    end
+  end
+
+  wire change_detected_dst = change_sync2;
+
+  // Uncertainty window counter (dst_clk domain)
+  localparam int CNT_W = $clog2(CDC_MAX_SYNC_LATENCY + SYNC_STAGES + 2);
+
+  reg [CNT_W-1:0] unc_cnt;
+  reg             uncertain_window;
+
+  always @(posedge dst_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      unc_cnt          <= '0;
+      uncertain_window <= 1'b0;
+    end else begin
+      if (change_detected_dst) begin
+        unc_cnt          <= SYNC_STAGES[CNT_W-1:0];
+        uncertain_window <= 1'b1;
+      end else if (unc_cnt != '0) begin
+        unc_cnt          <= unc_cnt - 1;
+        uncertain_window <= (unc_cnt > 1);
+      end else begin
+        uncertain_window <= 1'b0;
+      end
+    end
+  end
+
+  // Settled detection: dst_synced stable for SYNC_STAGES cycles
+  reg [CNT_W-1:0] stable_cnt;
+  reg             dst_synced_prev;
+  reg             settled;
+
+  always @(posedge dst_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      stable_cnt     <= '0;
+      dst_synced_prev <= 1'b0;
+      settled        <= 1'b0;
+    end else begin
+      dst_synced_prev <= dst_synced;
+      if (dst_synced != dst_synced_prev) begin
+        stable_cnt <= '0;
+        settled    <= 1'b0;
+      end else if (stable_cnt < SYNC_STAGES[CNT_W-1:0]) begin
+        stable_cnt <= stable_cnt + 1;
+        settled    <= 1'b0;
+      end else begin
+        settled <= 1'b1;
+      end
+    end
+  end
+
+  // Sync timeout: dst_synced must settle within
+  // CDC_MAX_SYNC_LATENCY dst_clk cycles after change detected
+  reg [CNT_W-1:0] timeout_cnt;
+  reg             timeout_active;
+  reg             sync_timeout;
+
+  always @(posedge dst_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      timeout_cnt    <= '0;
+      timeout_active <= 1'b0;
+      sync_timeout   <= 1'b0;
+    end else begin
+      if (change_detected_dst && !settled) begin
+        timeout_cnt    <= '0;
+        timeout_active <= 1'b1;
+        sync_timeout   <= 1'b0;
+      end else if (settled) begin
+        timeout_active <= 1'b0;
+        timeout_cnt    <= '0;
+        sync_timeout   <= 1'b0;
+      end else if (timeout_active) begin
+        if (timeout_cnt >= CDC_MAX_SYNC_LATENCY - 1) begin
+          sync_timeout <= 1'b1;
+        end else begin
+          timeout_cnt  <= timeout_cnt + 1;
+          sync_timeout <= 1'b0;
+        end
+      end
+    end
+  end
 
   // ----------------------------------------------------------
   // 1. Safety

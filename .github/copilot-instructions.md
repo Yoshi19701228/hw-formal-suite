@@ -13,44 +13,75 @@ If the user specifies an environment upfront, skip the question.
 
 ## Integration Pattern (always follow this when generating formal packages)
 
-When generating or explaining how to use a formal package, always apply the **Wrapper Pattern**:
+### Formal — Single Module (bind pattern)
+
+Helper logic and assertions are combined into **one module**. Use `bind` to attach it to the DUT non-intrusively.
 
 ```
 formal_top.sv
-  ├── DUT u_dut (...)                    ← unchanged RTL
-  ├── *_helper u_hlp (DUT signals → helper outputs)
-  └── *_assert_fml u_fml (DUT signals + helper outputs)
+  └── DUT u_dut (...)                    ← unchanged RTL
+        └── (bind) *_assert_fml u_fml   ← single module: helpers + assertions inside
 ```
 
-### Why the wrapper pattern
-
-- `bind` alone cannot share helper output wires with the assertion module — they live in different scopes.
-- Instantiating both in the same `formal_top` module makes wires visible to both.
-
-### Rules for generating a formal wrapper
-
-1. Declare `logic clk, rst_n` and all DUT interface signals.
-2. Instantiate DUT with renamed ports (DUT port name → local signal name).
-3. Declare wires for **all helper outputs** (copy from `*_helper.v` port list).
-4. Instantiate `*_helper` — connect DUT signals + helper output wires.
-5. Instantiate `*_assert_fml` — connect same DUT signals + same helper output wires.
-
-### Simulator pattern (simpler)
+**Module internal structure:**
 
 ```systemverilog
-// Single file: bind inside testbench
-bind <dut_module> <pkg>_assert_sim #(.PARAM(VAL)) u_chk (.*);
-// Use .* only when DUT internal signal names match assertion port names exactly.
-// Otherwise list connections explicitly.
+module <name>_assert_fml #(parameters) (DUT ports);
+
+  // ============================================================
+  // [Helper Logic] — internal registers, always blocks
+  // ============================================================
+  reg [N:0] cnt_xxx;
+  reg       flag_xxx;
+
+  always @(posedge clk or negedge rst_n) begin
+    // counter / flag / shift register logic
+  end
+
+  // ============================================================
+  // 1. Safety (assert property)
+  // ============================================================
+  // ...
+
+  // ============================================================
+  // 2. Reachability (cover property)
+  // ============================================================
+  // ...
+
+  // ============================================================
+  // 3. Environment (assume property)
+  // ============================================================
+  // ...
+
+endmodule
+
+// Bind to DUT (non-intrusive)
+bind <dut_module> <name>_assert_fml #(.PARAM(VAL)) u_fml (.*);
 ```
 
-### Trigger: when to generate a wrapper
+**Why single module:**
+- Helper state (counters, flags) lives in the same scope as assertions — no inter-module wiring needed.
+- `bind` keeps the DUT RTL untouched.
+- One file to maintain instead of two.
 
-Generate the formal wrapper automatically when the user says any of:
+### Simulator pattern (same structure)
+
+```systemverilog
+module <name>_assert_sim #(parameters) (DUT ports);
+  // helper logic + assertions in one module
+endmodule
+
+bind <dut_module> <name>_assert_sim #(.PARAM(VAL)) u_chk (.*);
+// Use .* only when DUT internal signal names match port names exactly.
+```
+
+### Trigger: when to generate formal_top
+
+Generate a `formal_top.sv` wrapper (DUT + bind instantiation) when the user says:
 - "Generate a formal wrapper" / "generate formal wrapper"
 - "How do I integrate this" / "how to integrate"
 - "Create a formal_top" / "create formal top"
-- After generating a formal package, proactively offer: "Would you like me to generate the formal_top wrapper for your DUT?"
+- After generating a package, proactively offer: "Would you like me to generate the formal_top wrapper?"
 
 ---
 
@@ -155,17 +186,35 @@ Always wrap helpers in a comment block:
 
 #### Formal Output Structure
 
-```
-File 1: <name>_assert.sv   — assert / cover / assume  (SVA)
-File 2: <name>_helper.v    — Verilog helper logic (counters, flags, shift registers)
-```
+Single file: `<name>_assert_fml.sv`
 
-Within `<name>_assert.sv`, order sections as:
+```systemverilog
+module <name>_assert_fml #(parameters) (
+  input logic clk, rst_n,
+  // ... DUT ports
+);
 
-```
-// 1. assert property  (safety)
-// 2. cover property   (reachability)
-// 3. assume property  (environment constraints)
+  // ============================================================
+  // [Helper Logic] counters / flags / shift registers
+  // ============================================================
+  reg [N:0] cnt_xxx;
+  always @(posedge clk or negedge rst_n) begin ... end
+
+  // ============================================================
+  // 1. Safety (assert property)
+  // ============================================================
+
+  // ============================================================
+  // 2. Reachability (cover property)
+  // ============================================================
+
+  // ============================================================
+  // 3. Environment (assume property)
+  // ============================================================
+
+endmodule
+
+bind <dut_module> <name>_assert_fml #(...) u_fml (.*);
 ```
 
 ---
@@ -175,42 +224,50 @@ Within `<name>_assert.sv`, order sections as:
 ### Template B-1: Simple Implication (Formal — minimal)
 
 ```systemverilog
-// ============================================================
-// [Description] — Formal
-// ============================================================
+module <name>_assert_fml #(
+  // parameters
+) (
+  input logic clk, rst_n,
+  input logic <antecedent_sig>, <consequent_sig>
+  // ... other DUT ports
+);
 
-// --- <name>_assert.sv ---
+  // ============================================================
+  // 1. Safety
+  // ============================================================
+  property prop_<name>;
+    @(posedge clk) disable iff (!rst_n)
+    <antecedent> |-> <consequent>;
+  endproperty
+  AST_<NAME>: assert property (prop_<name>);
 
-// 1. Safety
-property prop_<name>;
-  @(posedge clk) disable iff (!rst_n)
-  <antecedent> |-> <consequent>;
-endproperty
+  // ============================================================
+  // 2. Reachability
+  // ============================================================
+  COV_<NAME>_TRIGGER: cover property (@(posedge clk) <antecedent>);
+  COV_<NAME>_SUCCESS: cover property (@(posedge clk) <antecedent> ##1 <consequent>);
 
-AST_<NAME>: assert property (prop_<name>);
+endmodule
 
-// 2. Reachability
-COV_<NAME>_TRIGGER: cover property (@(posedge clk) <antecedent>);
-COV_<NAME>_SUCCESS: cover property (@(posedge clk) <antecedent> ##1 <consequent>);
+bind <dut_module> <name>_assert_fml #(...) u_fml (.*);
 ```
 
-### Template B-2: Timeout with Verilog Counter (req/ack timeout)
+### Template B-2: Timeout with Internal Counter (req/ack timeout)
 
-Instead of `##[1:MAX] ack` (state explosion), use a counter:
+Instead of `##[1:MAX] ack` (state explosion), use an internal counter:
 
-```verilog
-// --- req_ack_helper.v ---
-// ============================================================
-// [Helper Logic] req pending cycle counter
-// ============================================================
-module req_ack_helper #(parameter MAX_LATENCY = 16) (
-  input  wire clk,
-  input  wire rst_n,
-  input  wire req,
-  input  wire ack,
-  output reg  [$clog2(MAX_LATENCY+1)-1:0] cnt_req_pending,
-  output reg  timeout
+```systemverilog
+module req_ack_assert_fml #(parameter MAX_LATENCY = 16) (
+  input logic clk, rst_n,
+  input logic req, ack
 );
+
+  // ============================================================
+  // [Helper Logic] req pending cycle counter
+  // ============================================================
+  reg [$clog2(MAX_LATENCY+1)-1:0] cnt_req_pending;
+  reg timeout;
+
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       cnt_req_pending <= '0;
@@ -220,53 +277,62 @@ module req_ack_helper #(parameter MAX_LATENCY = 16) (
         cnt_req_pending <= cnt_req_pending + 1;
       else
         cnt_req_pending <= '0;
-
       timeout <= (cnt_req_pending >= MAX_LATENCY - 1) && req && !ack;
     end
   end
+
+  // ============================================================
+  // 1. Safety
+  // ============================================================
+  property prop_no_timeout;
+    @(posedge clk) disable iff (!rst_n)
+    !timeout;
+  endproperty
+  AST_NO_TIMEOUT: assert property (prop_no_timeout);
+
+  // ============================================================
+  // 2. Reachability
+  // ============================================================
+  COV_REQ_SEEN:     cover property (@(posedge clk) $rose(req));
+  COV_ACK_SEEN:     cover property (@(posedge clk) $rose(ack));
+  COV_REQ_ACK_PAIR: cover property (@(posedge clk) req ##[1:MAX_LATENCY] ack);
+  COV_MULTI_REQ:    cover property (@(posedge clk) $rose(req) ##[1:$] $rose(req));
+
 endmodule
-```
 
-```systemverilog
-// --- req_ack_assert.sv ---
-
-// 1. Safety
-property prop_no_timeout;
-  @(posedge clk) disable iff (!rst_n)
-  !timeout;   // driven by helper
-endproperty
-
-AST_NO_TIMEOUT: assert property (prop_no_timeout);
-
-// 2. Reachability
-COV_REQ_SEEN:     cover property (@(posedge clk) $rose(req));
-COV_ACK_SEEN:     cover property (@(posedge clk) $rose(ack));
-COV_REQ_ACK_PAIR: cover property (@(posedge clk) req ##[1:MAX_LATENCY] ack);
-COV_MULTI_REQ:    cover property (@(posedge clk) $rose(req) ##[1:$] $rose(req));
+bind req_ack_dut req_ack_assert_fml #(.MAX_LATENCY(16)) u_fml (.*);
 ```
 
 ### Template B-3: Handshake Stability
 
 ```systemverilog
-// --- handshake_assert.sv ---
-property prop_valid_stable;
-  @(posedge clk) disable iff (!rst_n)
-  (valid && !ready) |=> valid;
-endproperty
+module handshake_assert_fml (
+  input logic clk, rst_n,
+  input logic valid, ready,
+  input logic [31:0] data
+);
 
-property prop_data_stable;
-  @(posedge clk) disable iff (!rst_n)
-  (valid && !ready) |=> $stable(data);
-endproperty
+  // ============================================================
+  // 1. Safety
+  // ============================================================
+  property prop_valid_stable;
+    @(posedge clk) disable iff (!rst_n)
+    (valid && !ready) |=> valid;
+  endproperty
+  property prop_data_stable;
+    @(posedge clk) disable iff (!rst_n)
+    (valid && !ready) |=> $stable(data);
+  endproperty
 
-// 1. Safety
-AST_VALID_STABLE: assert property (prop_valid_stable);
-AST_DATA_STABLE:  assert property (prop_data_stable);
+  AST_VALID_STABLE: assert property (prop_valid_stable);
+  AST_DATA_STABLE:  assert property (prop_data_stable);
 
-// 2. Reachability
-COV_HANDSHAKE:      cover property (@(posedge clk) valid && ready);
-COV_VALID_WAIT:     cover property (@(posedge clk) valid && !ready);
-COV_WAIT_THEN_DONE: cover property (@(posedge clk) (valid && !ready) ##1 (valid && ready));
+  // ============================================================
+  // 2. Reachability
+  // ============================================================
+  COV_HANDSHAKE:      cover property (@(posedge clk) valid && ready);
+  COV_VALID_WAIT:     cover property (@(posedge clk) valid && !ready);
+  COV_WAIT_THEN_DONE: cover property (@(posedge clk) (valid && !ready) ##1 (valid && ready));
 
 // 3. Environment — ready arrives within a bounded number of cycles
 property assume_ready_eventually;

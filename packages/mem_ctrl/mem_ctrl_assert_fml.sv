@@ -3,6 +3,9 @@
 // Instantiate (or bind) alongside the DUT.
 // Order: assert (safety) -> cover (reachability) -> assume (environment).
 // No $error calls — this module targets formal property checking only.
+//
+// Usage (bind):
+//   bind <dut_module> mem_ctrl_assert_fml #(...) u_fml (.*);
 
 `default_nettype none
 
@@ -24,16 +27,59 @@ module mem_ctrl_assert_fml
   input wire [ADDR_W-1:0]    cpu_addr,
   input wire [DATA_W-1:0]    cpu_wdata,
   input wire [DATA_W-1:0]    cpu_rdata,
-  input wire                  cpu_ack,
-
-  // Signals from mem_ctrl_helper
-  input wire [ADDR_W-1:0]    chosen_addr,
-  input wire [DATA_W-1:0]    golden_data,
-  input wire                  golden_valid,
-  input wire                  wait_timeout,
-  // cnt_wait is used only for cover properties
-  input wire [WAIT_BITS-1:0] cnt_wait
+  input wire                  cpu_ack
 );
+
+  // ============================================================
+  // [Helper Logic] — golden data register and wait counter
+  //   (inlined from mem_ctrl_helper.v)
+  // ============================================================
+
+  // Non-deterministic address selection (driven by $anyconst)
+  wire [ADDR_W-1:0] chosen_addr;
+  assign chosen_addr = $anyconst;
+
+  // Golden data register
+  wire write_to_chosen = cpu_req && cpu_we && cpu_ack
+                         && (cpu_addr == chosen_addr);
+
+  reg  [DATA_W-1:0] golden_data;
+  reg               golden_valid;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      golden_data  <= {DATA_W{1'b0}};
+      golden_valid <= 1'b0;
+    end else begin
+      if (write_to_chosen) begin
+        golden_data  <= cpu_wdata;
+        golden_valid <= 1'b1;
+      end
+    end
+  end
+
+  // Wait (latency) counter
+  reg  [WAIT_BITS-1:0] cnt_wait;
+  reg                  wait_timeout;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cnt_wait    <= {WAIT_BITS{1'b0}};
+      wait_timeout <= 1'b0;
+    end else begin
+      if (cpu_req && !cpu_ack) begin
+        // Request pending; count up, saturate at MAX_WAIT
+        if (cnt_wait < MAX_WAIT[WAIT_BITS-1:0])
+          cnt_wait <= cnt_wait + 1'b1;
+      end else begin
+        // No pending request, or request just acknowledged: reset counter
+        cnt_wait <= {WAIT_BITS{1'b0}};
+      end
+
+      // Timeout fires when the counter reaches the threshold
+      wait_timeout <= (cnt_wait >= (MAX_WAIT - 1));
+    end
+  end
 
   // Default clock and reset for SVA
   default clocking @(posedge clk); endclocking
