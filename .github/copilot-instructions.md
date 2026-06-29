@@ -1215,16 +1215,115 @@ AST_CACHE_MOD_EXCL: assert property (prop_modified_exclusive);
 
 ---
 
+## Formal Scoreboard
+
+A formal scoreboard verifies that data entering a DUT exits correctly, using
+non-determinism to avoid state-space explosion.
+
+### When to generate a scoreboard
+
+Generate a scoreboard automatically when the user says any of:
+- "入力したデータが正しく出力されるか検証したい"
+- "データ整合性を確認したい" / "data integrity"
+- "Read-after-Write を検証したい"
+- "スコアボードを作って" / "scoreboard"
+- "FIFO / メモリ / バッファ のデータが正しいか確認したい"
+
+### Decision table — choose the technique based on the user's goal
+
+| User's goal | Technique | Key variable |
+|---|---|---|
+| Data value in == data value out (FIFO, queue) | `$anyconst chosen_slot` + ghost state | `golden_data` |
+| Write → Read same address (memory, register file) | `$anyconst chosen_addr` + golden register | `golden_data`, `golden_valid` |
+| Response latency ≤ N cycles | Internal timeout counter | `cnt_pending`, `timeout` |
+| All ports served fairly (arbiter) | `$anyconst chosen_port` + wait counter | `cnt_wait`, `starvation` |
+| Ordering preserved (reorder buffer, pipeline) | Push/pop shadow counters | `cnt_push`, `cnt_pop` |
+
+### Scoreboard module structure (always use this layout)
+
+```systemverilog
+module <dut>_scoreboard_fml #(parameters) (DUT ports);
+
+  // ============================================================
+  // [Scoreboard] Non-deterministic selector
+  // ============================================================
+  logic [W-1:0] chosen_slot;   // or chosen_addr / chosen_port
+  assign chosen_slot = $anyconst;
+
+  // ============================================================
+  // [Scoreboard] Ghost state — shadow the chosen transaction
+  // ============================================================
+  reg [DATA_W-1:0] golden_data;
+  reg              golden_valid;
+  reg              golden_out;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      golden_data  <= '0;
+      golden_valid <= 1'b0;
+      golden_out   <= 1'b0;
+    end else begin
+      if (<chosen transaction input condition>)  golden_data  <= <captured input>;
+      if (<chosen transaction input condition>)  golden_valid <= 1'b1;
+      if (<chosen transaction output condition>) golden_out   <= 1'b1;
+    end
+  end
+
+  // ============================================================
+  // 1. Safety — core scoreboard property
+  // ============================================================
+  property prop_data_integrity;
+    @(posedge clk) disable iff (!rst_n)
+    <output condition for chosen transaction> |-> <output> == golden_data;
+  endproperty
+  AST_DATA_INTEGRITY: assert property (prop_data_integrity);
+
+  // ============================================================
+  // 2. Reachability
+  // ============================================================
+  COV_SB_CAPTURED: cover property (@(posedge clk) $rose(golden_valid));
+  COV_SB_VERIFIED: cover property (@(posedge clk) $rose(golden_out));
+
+  // ============================================================
+  // 3. Environment (assume)
+  // ============================================================
+  // constrain chosen_slot to a valid range
+  ENV_SB_SLOT_VALID: assume property (@(posedge clk) chosen_slot < <MAX>);
+
+endmodule
+```
+
+### $anyconst vs $anyseq in scoreboards
+
+| | `$anyconst` | `$anyseq` |
+|---|---|---|
+| Value | Fixed for entire proof | Can change every cycle |
+| Use in scoreboard | Selecting WHICH transaction to track | Rarely used in scoreboards |
+| State-space impact | Minimal — one extra symbolic variable | Higher — per-cycle freedom |
+
+Always use `$anyconst` for transaction slot / address selection in scoreboards.
+
+### Clarifying questions to ask before generating a scoreboard
+
+1. What is the DUT type? (FIFO / memory / pipeline / bus)
+2. What signals carry data in and out? (din/dout, wdata/rdata, etc.)
+3. Is there an occupancy or valid signal? (full/empty, cnt_used, valid)
+4. What is the maximum latency from input to output?
+5. Should order be preserved, or can data arrive out of order?
+
+---
+
 ## How to Respond
 
 1. **Ask or confirm the environment**: Simulator or Formal? If not specified, ask.
 2. **Respond in the user's language**: English prompt → English response; Japanese prompt → Japanese response.
-3. **For cache verification**: ask write policy, structure, and coherence requirements before generating.
-4. **For Formal**: identify which parts need Verilog helpers (counters, delays, ghost state).
-5. **Generate** helpers first (`.v`), then SVA (`.sv`), with clear file/section headers.
-6. **For Formal**: add `assume property` for environment constraints where needed.
-7. **Explain** each assertion briefly — what it verifies and (for formal) why the helper was introduced.
-8. **Suggest** additional related assertions.
+3. **For scoreboard requests**: use the decision table above to select the technique, then ask the 5 clarifying questions if not already answered.
+4. **For cache verification**: ask write policy, structure, and coherence requirements before generating.
+5. **For Formal**: identify which parts need internal helper logic (counters, delays, ghost state).
+6. **Generate** a single module containing helper logic + assertions + cover + assume.
+7. **For Formal**: add `assume property` for environment constraints where needed.
+8. **Explain** each assertion briefly — what it verifies and why the technique was chosen.
+9. **Suggest** additional related assertions.
 
 ---
 
