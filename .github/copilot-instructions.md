@@ -1044,6 +1044,84 @@ When the user asks to verify a specific component or protocol, reference the rel
 
 ---
 
+## Asynchronous Clock Constraints
+
+### When to use async clock mode
+
+By default, formal tools assume all clocks are synchronous (fixed phase relationship).
+Use async clock constraints when the user says any of:
+- "クロック間を非同期として検証したい"
+- "非同期クロックドメイン" / "async clock domain"
+- "CDCを非同期で検証したい"
+- "クロックに位相制約を与えたくない"
+
+### How async clock modeling works in formal
+
+```
+Synchronous (default):  clk_a and clk_b have a fixed phase — tool explores fewer states
+Asynchronous (this):    NO phase constraint — tool explores ALL possible phase relationships
+                        Metastability modeled by $anyseq in the synchronizer window
+```
+
+### Three-layer async clock constraint structure
+
+```systemverilog
+// Layer 1: Clock liveness — each clock must eventually toggle
+//          (prevents the tool from holding a clock permanently high/low)
+ENV_CLK_A_MAX_HIGH: assume property (...);
+ENV_CLK_A_MAX_LOW:  assume property (...);
+ENV_CLK_B_MAX_HIGH: assume property (...);
+ENV_CLK_B_MAX_LOW:  assume property (...);
+
+// Layer 2: NO phase constraint between clk_a and clk_b
+//          (intentional omission — this IS the async assumption)
+
+// Layer 3: Synchronizer behavior
+//   - During metastability window: $anyseq (non-deterministic per cycle)
+//   - After SYNC_STAGES cycles:   output must match stable source value
+ENV_META_WINDOW:    assume property (@(posedge clk_b) in_meta_window |-> sig_b_syncd == $anyseq);
+ENV_SYNC_SETTLED:   assume property (@(posedge clk_b) sync_settled   |-> sig_b_syncd == sig_a);
+```
+
+### $anyseq for metastability
+
+| Phase | Signal state | Model |
+|---|---|---|
+| Source signal changes | `sig_a` toggles | — |
+| Metastability window (0 to MAX_META_WINDOW cycles) | `sig_b_syncd` may be anything | `$anyseq` — changes every clk_b cycle |
+| After SYNC_STAGES past the window | `sig_b_syncd` must equal `sig_a` | `assume sig_b_syncd == sig_a` |
+
+### Usage — bind to CDC DUT
+
+```systemverilog
+bind cdc_dut cdc_async_assume #(
+  .SYNC_STAGES   (2),   // number of FF sync stages in DUT
+  .CLK_A_MIN_HALF(2),   // minimum half-period of source clock
+  .CLK_B_MIN_HALF(3),   // minimum half-period of destination clock
+  .MAX_META_WINDOW(2),  // worst-case metastability duration (cycles)
+  .DATA_W        (1)    // width of the crossing signal
+) u_async_env (
+  .clk_a      (clk_src),
+  .clk_b      (clk_dst),
+  .rst_a_n    (rst_src_n),
+  .rst_b_n    (rst_dst_n),
+  .sig_a      (data_src),
+  .sig_b_syncd(data_syncd)
+);
+```
+
+The module is in `packages/cdc/cdc_async_assume.sv`.
+
+### When to ask clarifying questions
+
+Before generating async clock constraints, ask:
+1. How many sync FF stages does the DUT use? (default: 2)
+2. What is the approximate frequency ratio of the two clocks? (sets MIN_HALF)
+3. What signal(s) cross the clock domain boundary?
+4. Is this a single-bit or multi-bit crossing? (multi-bit needs additional Gray-code or handshake constraints)
+
+---
+
 ## Formal Abstraction Models
 
 When a sub-component causes state-space explosion, replace it with an abstract model from `abstractions/`.
