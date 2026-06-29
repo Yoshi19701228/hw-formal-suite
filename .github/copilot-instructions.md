@@ -1222,12 +1222,18 @@ non-determinism to avoid state-space explosion.
 
 ### When to generate a scoreboard
 
-Generate a scoreboard automatically when the user says any of:
-- "入力したデータが正しく出力されるか検証したい"
-- "データ整合性を確認したい" / "data integrity"
-- "Read-after-Write を検証したい"
-- "スコアボードを作って" / "scoreboard"
-- "FIFO / メモリ / バッファ のデータが正しいか確認したい"
+Generate a scoreboard automatically when the user's message contains ANY of these keywords or concepts — exact phrasing does not need to match:
+
+**Japanese keywords:** データ整合性, 値が正しい, 正しく出力, 正しく読める, 書いた値, 入力と出力, データが一致, スコアボード, Read-after-Write, バッファの検証, メモリの検証
+
+**English keywords:** data integrity, scoreboard, value matches, write-then-read, data correctness, output matches input, buffer verification
+
+**Context clues (even without the above keywords):**
+- User asks to verify a FIFO, memory, buffer, queue, or pipeline DUT
+- User describes checking that "what goes in comes out correctly"
+- User asks to verify write → read behavior on any storage element
+
+When in doubt, **default to generating a scoreboard** alongside regular assertions for any DUT that stores and retrieves data.
 
 ### Decision table — choose the technique based on the user's goal
 
