@@ -1432,3 +1432,82 @@ Always use `$anyconst` for transaction slot / address selection in scoreboards.
 | `assume property` | Environment constraint | ✅ use actively in formal |
 | `$anyconst` | Non-deterministic constant (formal) | ✅ universal quantification |
 | `$anyseq` | Non-deterministic sequence (formal) | ✅ environment input modelling |
+
+---
+
+## Verification Plan (2-Stage Workflow)
+
+### Stage 1 — Spec → Verification Plan
+
+When the user provides a spec (via `#file:`) and asks to "create a verification plan" or "generate a verification plan", output a YAML verification plan in this exact format:
+
+```yaml
+# === FILE: <dut>_vplan.yaml ===
+dut: <module_name>
+spec: <spec_name_or_doc>
+
+plan:
+  - id: VP-001
+    priority: critical          # critical / high / medium
+    category: protocol          # protocol / safety / data-integrity / liveness / reset
+    title: "<short title>"
+    description: >
+      <1-2 sentences: what property must hold and why>
+    signals: [sig1, sig2, ...]  # key signals involved
+    method: assertion           # assertion / scoreboard / cover-only
+    bound: 16                   # max cycles for the key event (used for helper counter)
+    coverage_goals:
+      - COV_<NAME>_NORMAL       # normal operation path
+      - COV_<NAME>_BOUNDARY     # boundary / edge case
+      - COV_<NAME>_ERROR        # error / corner case (if applicable)
+# === END FILE ===
+```
+
+**Plan generation rules:**
+- 5–10 items total — one item per major spec chapter or feature group, not per signal
+- Every item must include `coverage_goals` (at least 2 COV_ names per item)
+- `priority: critical` — protocol correctness, data loss, deadlock
+- `priority: high` — timing constraints, error handling
+- `priority: medium` — boundary conditions, back-to-back transfers
+- Choose `method: scoreboard` when the item verifies data value correctness (write→read match)
+- Choose `method: assertion` for protocol sequencing, timing, and state machine properties
+- Choose `method: cover-only` for reachability of optional features
+
+---
+
+### Stage 2 — Verification Plan → Assertions
+
+When the user provides a `*_vplan.yaml` (via `#file:`) and asks to "generate assertions from this plan" or "implement this verification plan":
+
+For each item in `plan`:
+1. Read `id`, `method`, `bound`, `coverage_goals`
+2. Generate the corresponding SVA inside a **single `*_assert_fml.sv` module**:
+   - `method: assertion` → `property` + `AST_` + all `COV_` in `coverage_goals`
+   - `method: scoreboard` → internal ghost register + `AST_` mismatch check + `COV_` points
+   - `method: cover-only` → only `COV_` properties, no `AST_`
+3. Group by VP id with a comment header:
+
+```systemverilog
+// ============================================================
+// [VP-001] <title>  priority: critical
+// ============================================================
+```
+
+4. Helper logic (counters for `bound`, ghost registers for scoreboard) goes in the `[Helper Logic]` section at the top of the module.
+
+**Output:** single `*_assert_fml.sv` using the standard single-module format.
+
+---
+
+### Trigger phrases for Stage 1 (plan generation)
+
+- "Create a verification plan" / "Generate a verification plan"
+- "検証プランを作って" / "検証プランを生成して"
+- "#file:spec.txt からプランを作って"
+- "What should we verify in this spec?"
+
+### Trigger phrases for Stage 2 (plan → assertions)
+
+- "Generate assertions from this plan" / "Implement this plan"
+- "このプランからアサーションを生成して"
+- "#file:xxx_vplan.yaml からアサーションを生成して"

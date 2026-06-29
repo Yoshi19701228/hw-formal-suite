@@ -123,6 +123,42 @@
     },
 
     // -------------------------------------------------------
+    // Stage 1: spec .txt → verification plan prompt for Copilot Chat
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Plan — spec → vplan prompt (active file)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/plan.py",
+        "spec",
+        "${file}",
+        "--output", "${workspaceFolder}/requirements"
+      ],
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+
+    // -------------------------------------------------------
+    // Stage 2: *_vplan.yaml → assertion prompt for Copilot Chat
+    // -------------------------------------------------------
+    {
+      "label": "HW Formal: Plan — vplan → assertion prompt (active file)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/plan.py",
+        "assert",
+        "${file}",
+        "--output", "${workspaceFolder}/requirements"
+      ],
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+
+    // -------------------------------------------------------
     // Extract text from PDF/Word → .txt (no API key required)
     // Open the .txt in VS Code, then use Copilot Chat with #file:
     // -------------------------------------------------------
